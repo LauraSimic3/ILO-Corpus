@@ -104,7 +104,7 @@ python 02_download_pdfs.py
 **Script:** `03_extract_text_to_json.py`
 
 For each PDF in `pdf_downloads/`:
-1. Extracts text using PyMuPDF (up to 1,000 pages per document)
+1. Extracts text using PyMuPDF
 2. Detects the language using `langdetect` — skips documents where English confidence falls below the threshold
 3. Matches metadata from `ilo_metadata.csv` using the filename (Record ID or Ilo Name)
 4. Saves a `.json` file containing the extracted text and matched metadata

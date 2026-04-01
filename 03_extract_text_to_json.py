@@ -100,7 +100,7 @@ def extract_text(pdf_path):
     """Extract text from PDF using PyMuPDF. Limited to 1,000 pages."""
     doc = fitz.open(pdf_path)
     parts = []
-    for page_num in range(min(len(doc), 1000)):
+    for page_num in range(len(doc)):
         try:
             text = doc[page_num].get_text()
             if text.strip():
