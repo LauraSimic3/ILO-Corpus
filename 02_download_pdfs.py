@@ -58,14 +58,10 @@ def validate_pdf_file(pdf_path):
 
 
 # ── DIRECT DOWNLOAD (Alternative URL) ─────────────────────────────────────────
-def direct_pdf_download(url, destination_dir):
+def direct_pdf_download(url, destination_dir, record_id):
     try:
         os.makedirs(destination_dir, exist_ok=True)
-        url_id = url.rstrip("/").split("/")[-1].split("?")[0].split("#")[0]
-        if not url_id:
-            url_id = "download"
-        if not url_id.lower().endswith(".pdf"):
-            url_id += ".pdf"
+        filename = f"{record_id}.pdf"
 
         headers = {
             "User-Agent": (
@@ -81,7 +77,7 @@ def direct_pdf_download(url, destination_dir):
         if "pdf" not in content_type and len(response.content) < 1000:
             return None
 
-        destination_path = os.path.join(destination_dir, url_id)
+        destination_path = os.path.join(destination_dir, filename)
         with open(destination_path, "wb") as f:
             f.write(response.content)
 
@@ -94,11 +90,9 @@ def direct_pdf_download(url, destination_dir):
 
 
 # ── PLAYWRIGHT DOWNLOAD (Main URL / fallback) ──────────────────────────────────
-async def playwright_download(url, destination_dir):
+async def playwright_download(url, destination_dir, record_id):
     """Opens URL in a browser and triggers the ILO download button."""
-    url_id = url.rstrip("/").split("/")[-1].split("?")[0].split("#")[0]
-    if not url_id:
-        url_id = "download"
+    filename = f"{record_id}.pdf"
     os.makedirs(destination_dir, exist_ok=True)
 
     async with async_playwright() as p:
@@ -118,10 +112,7 @@ async def playwright_download(url, destination_dir):
             }""")
 
             download = await download_future
-            original_filename = download.suggested_filename or f"{url_id}.pdf"
-            base = url_id.split("?")[0].split("#")[0]
-            final_filename = base if base.lower().endswith(".pdf") else base + ".pdf"
-            destination_path = os.path.join(destination_dir, final_filename)
+            destination_path = os.path.join(destination_dir, filename)
             await download.save_as(destination_path)
 
             if validate_pdf_file(destination_path):
@@ -143,6 +134,10 @@ async def process_batch(batch_df, batch_num, start_idx, total_rows):
         current_row = start_idx + idx + 1
         print(f"Row {current_row}/{total_rows}")
 
+        record_id = str(row.get("Record ID", "")).strip().replace(".0", "")
+        if not record_id or record_id.lower() == "nan":
+            record_id = f"unknown_{current_row}"
+
         alt_url  = str(row.get("Alternative URL", "")).strip()
         main_url = str(row.get("Main URL", "")).strip()
         alt_url  = "" if alt_url.lower() == "nan" else alt_url
@@ -154,16 +149,16 @@ async def process_batch(batch_df, batch_num, start_idx, total_rows):
         source_used = None
 
         if alt_url:
-            pdf_path = direct_pdf_download(alt_url, PDF_OUTPUT_FOLDER)
+            pdf_path = direct_pdf_download(alt_url, PDF_OUTPUT_FOLDER, record_id)
             if pdf_path:
                 source_used = "Alternative URL (Direct)"
             else:
-                pdf_path = await playwright_download(alt_url, PDF_OUTPUT_FOLDER)
+                pdf_path = await playwright_download(alt_url, PDF_OUTPUT_FOLDER, record_id)
                 if pdf_path:
                     source_used = "Alternative URL (Playwright)"
 
         if not pdf_path and main_url:
-            pdf_path = await playwright_download(main_url, PDF_OUTPUT_FOLDER)
+            pdf_path = await playwright_download(main_url, PDF_OUTPUT_FOLDER, record_id)
             if pdf_path:
                 source_used = "Main URL"
 
