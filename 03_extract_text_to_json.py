@@ -4,7 +4,7 @@ ILO Corpus Pipeline — Step 3: Extract Text from PDFs and Save as JSON
 For each downloaded PDF:
   1. Extracts text using PyMuPDF
   2. Checks the text is at least 80% English (langdetect)
-  3. Matches metadata from the ilo_metadata CSV (Step 1 output)
+  3. Matches metadata from the ilo_metadata CSV using the Record ID in the filename (set by Step 2)
   4. Saves a JSON file per document containing text + metadata
 
 Non-English PDFs and PDFs with insufficient text are skipped and logged.

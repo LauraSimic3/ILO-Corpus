@@ -139,7 +139,7 @@ python 03_extract_text_to_json.py
 
 > **The English threshold** of 0.80 means at least 80% of the detected text must be classified as English. Documents below this threshold are skipped and logged. Adjust this value if your corpus has different language requirements.
 
-> **Metadata matching:** The script tries to match each PDF filename to a row in `ilo_labordoc_metadata_MAR2026.csv` using the ILO Record ID (15-digit number) or the Ilo Name (ILO call number, e.g. `09466(2008-2)`). Files that cannot be matched still produce a JSON file but with minimal metadata (filename only).
+> **Metadata matching:** Because PDFs are named by Record ID in Step 2, each file is matched directly to its metadata row. Match failures should not occur under normal circumstances.
 
 ---
 
