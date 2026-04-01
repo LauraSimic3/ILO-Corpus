@@ -75,9 +75,17 @@ python 01_collect_metadata.py
 
 **Script:** `02_download_pdfs.py`
 
-Downloads a PDF for each row in the metadata CSV. Tries the `Alternative URL` column first (direct HTTP download), then falls back to the `Main URL` column using Playwright browser automation to click the ILO Labordoc download button.
+Attempts to download a PDF for every row in the metadata CSV. The script uses two methods in sequence:
+
+**Method 1 — Direct download (Alternative URL)**
+The `Alternative URL` column in the metadata contains direct links to PDF files hosted on the ILO public library server (`ilo.org/public/libdoc/...`). The script attempts a straightforward HTTP GET request for these first. This is faster but not all records have a working direct URL.
+
+**Method 2 — Browser automation (Main URL, Playwright)**
+If the direct download fails or no Alternative URL is present, the script falls back to the `Main URL` — the ILO Labordoc catalogue page for that record. Playwright launches a Chromium browser, navigates to the page, and clicks the download button. This method is reliable but slow, as each download opens and closes a fresh browser instance. This was the primary method used to build the original corpus.
 
 Downloaded files are validated with PyPDF2; any file that fails validation is deleted automatically.
+
+> **Scope note:** This script will attempt to download PDFs for **all records** in the metadata CSV regardless of language. The metadata `Language` field is not always reliably populated, so the script does not pre-filter by language. English filtering happens in Step 3. If you want to limit the download scope (e.g. by year range, subject, or language), filter your metadata CSV before running this script.
 
 **Configure** (top of script):
 ```python
@@ -95,7 +103,7 @@ python 02_download_pdfs.py
 - `download_reports/` — per-batch success and failure CSVs
 - `FINAL_<timestamp>_downloaded.csv` / `FINAL_<timestamp>_missed.csv` — master download logs
 
-> Not all records in `ilo_labordoc_metadata_MAR2026.csv` will have a downloadable PDF. Expect a success rate of approximately 40–50% depending on the year range. The `FINAL_missed.csv` file records every failed attempt with the URLs tried.
+> Not all records will have a downloadable PDF — some catalogue records do not have a publicly accessible full-text document. The `FINAL_missed.csv` file records every failed attempt with the URLs tried.
 
 > **Resumable:** The script processes rows in batches of 5,000 and saves progress after each batch. If interrupted, you can re-run it; already-downloaded PDFs are not re-downloaded (the JSON skip logic in Step 3 handles duplicates).
 
