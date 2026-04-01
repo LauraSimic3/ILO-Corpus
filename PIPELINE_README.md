@@ -38,7 +38,7 @@ Step 1  01_collect_metadata.py   Query ILO API → ilo_labordoc_metadata_MAR2026
 Step 2  02_download_pdfs.py      Download PDFs → pdf_downloads/
 Step 3  03_extract_text_to_json.py  Extract text, detect English → json_output/
 Step 4  04_format_sketchengine.py   (optional) JSON → XML → sketchengine_xml/
-Step 5  05_verify_corpus.py      Verify alignment across all artefacts
+Step 5  05_build_and_verify.py   Build corpus metadata CSV + verify alignment across all three sources
 ```
 
 ---
@@ -170,31 +170,39 @@ python 04_format_sketchengine.py
 
 ---
 
-### Step 5 — Verify corpus integrity
+### Step 5 — Build corpus metadata and verify alignment
 
-**Script:** `05_verify_corpus.py`
+**Script:** `05_build_and_verify.py`
 
-Runs a verification suite confirming that:
-- XML files contain no missing IDs, duplicate IDs, or malformed publication dates
-- `ilo_corpus_metadata_MAR2026.csv` has no duplicate IDs or invalid dates
-- `ilo_labordoc_metadata_MAR2026.csv` IN_CORPUS=YES count matches `ilo_corpus_metadata_MAR2026.csv` row count
-- ID sets are fully aligned across all three sources
+This script does three things in sequence:
+
+**1. Scan** — reads your JSON files (Step 3) or SketchEngine XML files (Step 4) and extracts the Record ID and metadata for every document that made it into your corpus. JSON is preferred as the source if both are present.
+
+**2. Build** — writes `ilo_corpus_metadata_NEW.csv`: one row per corpus document with all available metadata fields. Also stamps `IN_CORPUS=YES` in `ilo_labordoc_metadata_MAR2026.csv` for every record present in your corpus, and `IN_CORPUS=NO` for all others.
+
+**3. Verify** — runs cross-checks across all three sources to confirm they are fully aligned:
+- Source file count (JSON/XML) == `ilo_corpus_metadata_NEW.csv` rows == `ilo_labordoc_metadata_MAR2026.csv` IN_CORPUS=YES
+- All Record IDs consistent across all three sources
+- No malformed publication dates in corpus metadata
+- If both JSON and XML exist, their document counts match
 
 **Configure** (top of script):
 ```python
-XML_FOLDER  = "sketchengine_xml"    # Step 4 output (or skip if not using SketchEngine)
-CORPUS_CSV  = "ilo_corpus_metadata_MAR2026.csv" # your curated metadata subset
-ILO_CSV     = "ilo_labordoc_metadata_MAR2026.csv"    # full ILO metadata from Step 1
+JSON_FOLDER      = "json_output"                        # Step 3 output (preferred source)
+XML_FOLDER       = "sketchengine_xml"                   # Step 4 output (used if no JSON)
+ILO_LABORDOC_CSV = "ilo_labordoc_metadata_MAR2026.csv"  # Full metadata from Step 1
+CORPUS_OUT_CSV   = "ilo_corpus_metadata_NEW.csv"        # Created by this script
 ```
 
 **Run:**
 ```
-python 05_verify_corpus.py
+python 05_build_and_verify.py
 ```
 
-The script prints a PASS/FAIL result for each check and a final summary. If all checks pass, the corpus is clean and fully aligned.
-
-> **Note on `ilo_corpus_metadata_MAR2026.csv`:** This file is not produced automatically by the pipeline. It is the curated, cleaned metadata subset you create from `ilo_labordoc_metadata_MAR2026.csv` corresponding to the documents you actually downloaded and accepted. The `IN_CORPUS` column in `ilo_labordoc_metadata_MAR2026.csv` is the flag that marks which records are included. See the data paper for details on the curation decisions made for this corpus.
+**Output:**
+- `ilo_corpus_metadata_NEW.csv` — corpus metadata, one row per document
+- `ilo_labordoc_metadata_MAR2026.csv` — updated in place with `IN_CORPUS` flag
+- PASS/FAIL verification report printed to console
 
 ---
 
