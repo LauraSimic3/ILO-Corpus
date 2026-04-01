@@ -33,8 +33,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 XML_FOLDER  = "sketchengine_xml"    # Folder containing XML batch files (Step 4)
-CORPUS_CSV  = "corpus_metadata.csv" # Your curated corpus metadata CSV
-ILO_CSV     = "ilo_metadata.csv"    # Full ILO metadata CSV from Step 1
+CORPUS_CSV  = "ilo_corpus_metadata_MAR2026.csv" # Your curated corpus metadata CSV
+ILO_CSV     = "ilo_labordoc_metadata_MAR2026.csv"    # Full ILO metadata CSV from Step 1
 
 # ── HELPERS ────────────────────────────────────────────────────────────────────
 results = []

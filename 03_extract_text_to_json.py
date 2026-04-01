@@ -38,7 +38,7 @@ from tqdm import tqdm
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 PDF_FOLDER         = "pdf_downloads"     # Folder containing downloaded PDFs (Step 2 output)
 JSON_OUTPUT_FOLDER = "json_output"       # Where JSON files are saved
-METADATA_CSV       = "ilo_metadata.csv"  # Metadata CSV from Step 1
+METADATA_CSV       = "ilo_labordoc_metadata_MAR2026.csv"  # Metadata CSV from Step 1
 ENGLISH_THRESHOLD  = 0.80                # Minimum English confidence (0–1)
 
 _ts = datetime.now().strftime("%Y%m%d_%H%M%S")

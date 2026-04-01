@@ -34,7 +34,7 @@ import requests
 from PyPDF2 import PdfReader
 
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
-METADATA_CSV      = "ilo_metadata.csv"   # CSV from Step 1 (must have Main URL + Alternative URL columns)
+METADATA_CSV      = "ilo_labordoc_metadata_MAR2026.csv"   # CSV from Step 1 (must have Main URL + Alternative URL columns)
 PDF_OUTPUT_FOLDER = "pdf_downloads"       # Folder where PDFs are saved
 REPORTS_FOLDER    = "download_reports"    # Folder for per-batch success/failure logs
 BATCH_SIZE        = 5000                  # Save progress every N rows
