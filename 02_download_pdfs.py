@@ -102,16 +102,15 @@ async def playwright_download(url, destination_dir, record_id):
 
         try:
             await page.goto(url, timeout=60000)
-            download_future = page.wait_for_event("download")
-            await page.evaluate("""() => {
-                const icon = document.querySelector('md-icon[md-svg-icon="file:ic_download_24px"]');
-                if (!icon) throw new Error('Download icon not found');
-                const clickable = icon.closest('button, a, div[role="button"]');
-                if (clickable) clickable.click();
-                else throw new Error('Clickable parent not found');
-            }""")
-
-            download = await download_future
+            async with page.expect_download() as download_info:
+                await page.evaluate("""() => {
+                    const icon = document.querySelector('md-icon[md-svg-icon="file:ic_download_24px"]');
+                    if (!icon) throw new Error('Download icon not found');
+                    const clickable = icon.closest('button, a, div[role="button"]');
+                    if (clickable) clickable.click();
+                    else throw new Error('Clickable parent not found');
+                }""")
+            download = await download_info.value
             destination_path = os.path.join(destination_dir, filename)
             await download.save_as(destination_path)
 

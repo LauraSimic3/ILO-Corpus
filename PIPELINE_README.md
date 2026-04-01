@@ -26,7 +26,7 @@ This repository accompanies the data paper:
 ```
 Python 3.9+
 pip install requests pandas pymupdf langdetect tqdm PyPDF2 openpyxl
-playwright install chromium   # for PDF downloading via browser automation
+python -m playwright install chromium   # for PDF downloading via browser automation
 ```
 
 ---
