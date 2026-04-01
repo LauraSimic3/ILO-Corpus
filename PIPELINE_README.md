@@ -241,5 +241,7 @@ If you use this pipeline or the metadata files, please cite:
 ## Licence
 
 The pipeline scripts are released under the MIT Licence.
-The metadata files (`ilo_labordoc_metadata_MAR2026.csv`, `ilo_corpus_metadata_MAR2026.csv`) are released under CC BY 4.0.
-PDF files and XML corpus files are subject to ILO copyright and are not shared.
+
+The metadata files (`ilo_labordoc_metadata_MAR2026.csv`, `ilo_corpus_metadata_MAR2026.csv`) are derived from the ILO Labordoc catalogue API and are shared here for research and reproducibility purposes. Users should satisfy themselves with the ILO's terms of use before any further redistribution.
+
+PDF files and XML corpus files contain extracted text from ILO publications and are subject to ILO copyright. They are not shared in this repository.
