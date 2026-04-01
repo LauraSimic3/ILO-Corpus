@@ -65,7 +65,9 @@ python 01_collect_metadata.py
 
 **Output:** `ilo_labordoc_metadata_MAR2026.csv` — one row per catalogue record, 24 columns including Record ID, title, URLs, publication date, author, subject, and Ilo Name (the ILO's internal call number, used for PDF filename matching in later steps).
 
-> The full 1900–2024 collection produces approximately 128,000 rows and takes several hours to run due to API pagination. You can restrict `START_YEAR`/`END_YEAR` to collect a subset by date range.
+> **API pagination:** The ILO Alma SRU API limits responses to 50 records per request. To ensure comprehensive coverage the script works around this by querying one year at a time and paginating through all 50-record batches within each year until all records for that year are retrieved. This is why the script is structured by year — without this approach, records beyond the first 50 per query would be silently missed. The API returns records in MARCXML format; the script parses this and maps the relevant MARC fields to a flat CSV structure.
+
+> The full 1900–2024 collection produces approximately 128,000 rows and takes several hours to run. You can restrict `START_YEAR`/`END_YEAR` to collect a subset by date range.
 
 ---
 
