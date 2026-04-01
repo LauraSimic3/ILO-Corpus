@@ -1,6 +1,6 @@
 # ILO Corpus Pipeline
 
-A reproducible pipeline for building a corpus of English-language International Labour Organisation (ILO) documents from the publicly available ILO Labordoc catalogue API.
+A reproducible pipeline for building a corpus of English-language International Labour Organisation (ILO) documents from the available ILO Labordoc catalogue API.
 
 This repository accompanies the data paper:
 > *[Full citation to be added on publication]*
