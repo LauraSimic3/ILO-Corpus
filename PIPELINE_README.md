@@ -219,7 +219,7 @@ Two metadata files are shared alongside this pipeline:
 
 ---
 
-## Corpus scope
+## ILO Corpus scope
 
 | Property | Value |
 |---|---|
