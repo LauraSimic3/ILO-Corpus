@@ -1,0 +1,8 @@
+requests
+pandas
+pymupdf
+langdetect
+tqdm
+PyPDF2
+openpyxl
+playwright
