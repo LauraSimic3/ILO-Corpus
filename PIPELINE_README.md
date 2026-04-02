@@ -34,11 +34,11 @@ python -m playwright install chromium   # for PDF downloading via browser automa
 ## Pipeline overview
 
 ```
-Step 1  01_collect_metadata.py   Query ILO API → ilo_labordoc_metadata_MAR2026.csv
-Step 2  02_download_pdfs.py      Download PDFs → pdf_downloads/
+Step 1  01_collect_metadata.py      Query ILO API → ilo_labordoc_metadata_MAR2026.csv
+Step 2  02_download_pdfs.py         Download PDFs → pdf_downloads/
 Step 3  03_extract_text_to_json.py  Extract text, detect English → json_output/
-Step 4  04_format_sketchengine.py   (optional) JSON → XML → sketchengine_xml/
-Step 5  05_build_and_verify.py   Build corpus metadata CSV + verify alignment across all three sources
+Step 4  04_build_and_verify.py      Build corpus metadata CSV + verify alignment across all three sources
+Step 5  05_format_sketchengine.py   (optional) JSON → XML → sketchengine_xml/
 ```
 
 ---
@@ -143,9 +143,45 @@ python 03_extract_text_to_json.py
 
 ---
 
-### Step 4 — Format for SketchEngine (optional)
+### Step 4 — Build corpus metadata and verify alignment
 
-**Script:** `04_format_sketchengine.py`
+**Script:** `04_build_and_verify.py`
+
+This script does three things in sequence:
+
+**1. Scan** — reads your JSON files (Step 3) or SketchEngine XML files (Step 5) and extracts the Record ID and metadata for every document that made it into your corpus. JSON is preferred as the source if both are present.
+
+**2. Build** — writes `ilo_corpus_metadata_NEW.csv`: one row per corpus document with all available metadata fields. Also stamps `IN_CORPUS=YES` in `ilo_labordoc_metadata_MAR2026.csv` for every record present in your corpus, and `IN_CORPUS=NO` for all others.
+
+**3. Verify** — runs cross-checks across all three sources to confirm they are fully aligned:
+- Source file count (JSON/XML) == `ilo_corpus_metadata_NEW.csv` rows == `ilo_labordoc_metadata_MAR2026.csv` IN_CORPUS=YES
+- All Record IDs consistent across all three sources
+- No malformed publication dates in corpus metadata
+- If both JSON and XML exist, their document counts match
+
+**Configure** (top of script):
+```python
+JSON_FOLDER      = "json_output"                        # Step 3 output (preferred source)
+XML_FOLDER       = "sketchengine_xml"                   # Step 5 output (used if no JSON)
+ILO_LABORDOC_CSV = "ilo_labordoc_metadata_MAR2026.csv"  # Full metadata from Step 1
+CORPUS_OUT_CSV   = "ilo_corpus_metadata_NEW.csv"        # Created by this script
+```
+
+**Run:**
+```
+python 04_build_and_verify.py
+```
+
+**Output:**
+- `ilo_corpus_metadata_NEW.csv` — corpus metadata, one row per document
+- `ilo_labordoc_metadata_MAR2026.csv` — updated in place with `IN_CORPUS` flag
+- PASS/FAIL verification report printed to console
+
+---
+
+### Step 5 — Format for SketchEngine (optional)
+
+**Script:** `05_format_sketchengine.py`
 
 Converts the JSON files from Step 3 into SketchEngine vertical corpus XML format. Each document becomes a `<doc>` element with metadata stored as XML attributes, containing `<p>` (paragraph) and `<s>` (sentence) child elements.
 
@@ -160,49 +196,13 @@ MAX_BATCH_SIZE_MB = 450                 # split threshold (keep under 500 MB)
 
 **Run:**
 ```
-python 04_format_sketchengine.py
+python 05_format_sketchengine.py
 ```
 
 **Output:**
 - `sketchengine_xml/ILO_Corpus_Batch_01.xml`, `_02.xml`, … — SketchEngine-ready XML batch files
 
 > This step is only needed if you intend to use the corpus in SketchEngine. The JSON files produced by Step 3 are usable independently with any other NLP toolchain.
-
----
-
-### Step 5 — Build corpus metadata and verify alignment
-
-**Script:** `05_build_and_verify.py`
-
-This script does three things in sequence:
-
-**1. Scan** — reads your JSON files (Step 3) or SketchEngine XML files (Step 4) and extracts the Record ID and metadata for every document that made it into your corpus. JSON is preferred as the source if both are present.
-
-**2. Build** — writes `ilo_corpus_metadata_NEW.csv`: one row per corpus document with all available metadata fields. Also stamps `IN_CORPUS=YES` in `ilo_labordoc_metadata_MAR2026.csv` for every record present in your corpus, and `IN_CORPUS=NO` for all others.
-
-**3. Verify** — runs cross-checks across all three sources to confirm they are fully aligned:
-- Source file count (JSON/XML) == `ilo_corpus_metadata_NEW.csv` rows == `ilo_labordoc_metadata_MAR2026.csv` IN_CORPUS=YES
-- All Record IDs consistent across all three sources
-- No malformed publication dates in corpus metadata
-- If both JSON and XML exist, their document counts match
-
-**Configure** (top of script):
-```python
-JSON_FOLDER      = "json_output"                        # Step 3 output (preferred source)
-XML_FOLDER       = "sketchengine_xml"                   # Step 4 output (used if no JSON)
-ILO_LABORDOC_CSV = "ilo_labordoc_metadata_MAR2026.csv"  # Full metadata from Step 1
-CORPUS_OUT_CSV   = "ilo_corpus_metadata_NEW.csv"        # Created by this script
-```
-
-**Run:**
-```
-python 05_build_and_verify.py
-```
-
-**Output:**
-- `ilo_corpus_metadata_NEW.csv` — corpus metadata, one row per document
-- `ilo_labordoc_metadata_MAR2026.csv` — updated in place with `IN_CORPUS` flag
-- PASS/FAIL verification report printed to console
 
 ---
 

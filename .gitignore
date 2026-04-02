@@ -1,0 +1,14 @@
+# Downloaded PDFs — ILO copyright, not shared
+pdf_downloads/
+test_run/pdf_downloads/
+
+# SketchEngine XML corpus files — derived from copyrighted PDFs, not shared
+sketchengine_xml/
+test_run/sketchengine_xml/
+
+# Log files
+*.log
+
+# Python cache
+__pycache__/
+*.pyc

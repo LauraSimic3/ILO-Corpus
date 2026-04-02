@@ -1,5 +1,5 @@
 """
-ILO Corpus Pipeline — Step 4 (OPTIONAL): Format JSON Files for SketchEngine
+ILO Corpus Pipeline — Step 5 (OPTIONAL): Format JSON Files for SketchEngine
 =============================================================================
 Converts the JSON files produced by Step 3 into SketchEngine vertical corpus
 XML format: each document becomes a <doc> element with metadata as attributes,
@@ -15,7 +15,7 @@ Dependencies:
     pip install tqdm
 
 Usage:
-    python 04_format_sketchengine.py
+    python 05_format_sketchengine.py
     Set JSON_INPUT_FOLDER and XML_OUTPUT_FOLDER below before running.
 """
 

@@ -1,9 +1,9 @@
 """
-ILO Corpus Pipeline — Step 5: Build Corpus Metadata and Verify Alignment
+ILO Corpus Pipeline — Step 4: Build Corpus Metadata and Verify Alignment
 =========================================================================
 This script does three things:
 
-  1. SCAN — reads whatever you produced in Steps 3/4 (JSON files and/or
+  1. SCAN — reads whatever you produced in Steps 3/5 (JSON files and/or
      SketchEngine XML files) and extracts the Record ID and metadata for
      every document that made it into your corpus.
 
@@ -19,11 +19,11 @@ This script does three things:
        (C) ilo_labordoc_metadata_MAR2026.csv  IN_CORPUS=YES
 
 The source scan prefers JSON files (richer metadata, already parsed) but will
-fall back to XML if only Step 4 output is present.  If both exist the JSON
+fall back to XML if only Step 5 output is present.  If both exist the JSON
 folder is used and the XML count is checked separately for consistency.
 
 Usage:
-    python 05_build_and_verify.py
+    python 04_build_and_verify.py
     Set the paths below to match your output folders/files.
 
 Dependencies:
@@ -43,7 +43,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 JSON_FOLDER      = "json_output"                        # Step 3 output (preferred source)
-XML_FOLDER       = "sketchengine_xml"                   # Step 4 output (used if no JSON)
+XML_FOLDER       = "sketchengine_xml"                   # Step 5 output (used if no JSON)
 ILO_LABORDOC_CSV = "ilo_labordoc_metadata_MAR2026.csv"  # Full metadata from Step 1
 CORPUS_OUT_CSV   = "ilo_corpus_metadata_NEW.csv"        # Created by this script
 
@@ -308,7 +308,7 @@ def main():
     )
 
     if not has_json and not has_xml:
-        print("ERROR: No JSON or XML output found. Run Step 3 and/or Step 4 first.")
+        print("ERROR: No JSON or XML output found. Run Step 3 and/or Step 5 first.")
         return
 
     if not os.path.exists(ILO_LABORDOC_CSV):
