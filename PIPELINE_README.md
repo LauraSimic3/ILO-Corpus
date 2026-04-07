@@ -212,8 +212,8 @@ Two metadata files are shared alongside this pipeline:
 
 | File | Rows | Description |
 |---|---|---|
-| `ilo_labordoc_metadata_MAR2026.csv` | ~128,000 | Raw API output: all English ILO catalogue records 1900–2024. **Do not overwrite** — this is the authoritative source. |
-| `ilo_corpus_metadata_MAR2026.csv` | 53,830 | Curated subset: documents that were successfully downloaded, passed English detection, and were included in the final corpus. Publication dates have been cleaned (brackets removed, Arabic digits converted, Year field used as fallback). |
+| `ILO_labordoc_metadata_MAR2026.csv` | ~128,000 | Raw API output: all English ILO catalogue records 1900–2024. **Do not overwrite** — this is the authoritative source. |
+| `ILO_Corpus_metadata_MAR2026.csv` | 53,830 | Curated subset: documents that were successfully downloaded, passed English detection, and were included in the final corpus. Publication dates have been cleaned (brackets removed, Arabic digits converted, Year field used as fallback). |
 
 > **Publication date note:** The `Publication Date` field in `ILO_labordoc_metadata_MAR2026.csv` is the raw API value and may contain non-standard formats (brackets, question marks, Arabic digits, date ranges). The `publication_date` field in `ILO_Corpus_metadata_MAR2026.csv` is a cleaned 4-digit year. These differences are by design — see Step 3 script comments for the cleaning logic.
 
