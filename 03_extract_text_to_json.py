@@ -22,6 +22,7 @@ Usage:
     Set PDF_FOLDER, JSON_OUTPUT_FOLDER, and METADATA_CSV below before running.
 """
 
+import glob
 import os
 import sys
 import json
@@ -35,10 +36,22 @@ import pandas as pd
 from langdetect import detect_langs, LangDetectException
 from tqdm import tqdm
 
+
+def _find_labordoc_csv():
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ilo_labordoc_metadata_DATE.csv)."""
+    matches = sorted(glob.glob("ilo_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
+    if not matches:
+        raise FileNotFoundError(
+            "No ilo_labordoc_metadata_DATE.csv found in the current directory. "
+            "Run Step 1 first, or set METADATA_CSV manually below."
+        )
+    return matches[0]
+
+
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 PDF_FOLDER         = "pdf_downloads"     # Folder containing downloaded PDFs (Step 2 output)
 JSON_OUTPUT_FOLDER = "json_output"       # Where JSON files are saved
-METADATA_CSV       = "ilo_labordoc_metadata_MAR2026.csv"  # Metadata CSV from Step 1
+METADATA_CSV       = _find_labordoc_csv()  # Auto-detected from Step 1 output (ilo_labordoc_metadata_DATE.csv)
 ENGLISH_THRESHOLD  = 0.80                # Minimum English confidence (0–1)
 
 _ts = datetime.now().strftime("%Y%m%d_%H%M%S")

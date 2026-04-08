@@ -7,16 +7,17 @@ This script does three things:
      SketchEngine XML files) and extracts the Record ID and metadata for
      every document that made it into your corpus.
 
-  2. BUILD — writes ilo_corpus_metadata_NEW.csv: one row per corpus document,
+  2. BUILD — writes ilo_corpus_metadata_DATE.csv: one row per corpus document,
      with metadata drawn from your JSON/XML output.  Also stamps IN_CORPUS=YES
-     in ilo_labordoc_metadata_MAR2026.csv for every record present in the
+     in ilo_labordoc_metadata_DATE.csv for every record present in the
      corpus, and IN_CORPUS=NO for all others.
+     DATE is automatically set to the date the script is run (e.g. 08APR2026).
 
   3. VERIFY — runs a cross-check across all three sources to confirm counts
      and ID sets are fully aligned:
        (A) JSON or XML files on disk
-       (B) ilo_corpus_metadata_NEW.csv
-       (C) ilo_labordoc_metadata_MAR2026.csv  IN_CORPUS=YES
+       (B) ilo_corpus_metadata_DATE.csv
+       (C) ilo_labordoc_metadata_DATE.csv  IN_CORPUS=YES
 
 The source scan prefers JSON files (richer metadata, already parsed) but will
 fall back to XML if only Step 5 output is present.  If both exist the JSON
@@ -30,22 +31,36 @@ Dependencies:
     pip install pandas
 """
 
+import glob
 import os
 import sys
 import re
 import csv
 import json
 from collections import Counter
+from datetime import datetime
 
 import pandas as pd
 
 sys.stdout.reconfigure(encoding="utf-8")
 
+
+def _find_labordoc_csv():
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ilo_labordoc_metadata_DATE.csv)."""
+    matches = sorted(glob.glob("ilo_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
+    if not matches:
+        raise FileNotFoundError(
+            "No ilo_labordoc_metadata_DATE.csv found in the current directory. "
+            "Run Step 1 first, or set ILO_LABORDOC_CSV manually below."
+        )
+    return matches[0]
+
+
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
-JSON_FOLDER      = "json_output"                        # Step 3 output (preferred source)
-XML_FOLDER       = "sketchengine_xml"                   # Step 5 output (used if no JSON)
-ILO_LABORDOC_CSV = "ilo_labordoc_metadata_MAR2026.csv"  # Full metadata from Step 1
-CORPUS_OUT_CSV   = "ilo_corpus_metadata_NEW.csv"        # Created by this script
+JSON_FOLDER      = "json_output"           # Step 3 output (preferred source)
+XML_FOLDER       = "sketchengine_xml"      # Step 5 output (used if no JSON)
+ILO_LABORDOC_CSV = _find_labordoc_csv()    # Auto-detected from Step 1 output (ilo_labordoc_metadata_DATE.csv)
+CORPUS_OUT_CSV   = f"ilo_corpus_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"   # Auto-dated output (e.g. ilo_corpus_metadata_08APR2026.csv)
 
 
 # ── HELPERS ────────────────────────────────────────────────────────────────────
@@ -186,7 +201,7 @@ def build_corpus_csv(records, output_path):
 
 def update_in_corpus_flag(labordoc_path, corpus_id_set):
     """
-    Add or update the IN_CORPUS column in ilo_labordoc_metadata_MAR2026.csv.
+    Add or update the IN_CORPUS column in the labordoc metadata CSV.
     YES = record is in the corpus, NO = not included.
     Writes back to the same file.
     """
@@ -233,7 +248,7 @@ def verify(source_ids, corpus_csv_path, labordoc_path, xml_folder):
         for r in corpus_bad_date[:5]:
             print(f"        id={r['id']}  pub='{r['pub']}'")
 
-    print("\n[C]  ilo_labordoc_metadata_MAR2026.csv  IN_CORPUS flag")
+    print(f"\n[C]  {os.path.basename(labordoc_path)}  IN_CORPUS flag")
     ilo_yes_ids = set()
     if os.path.exists(labordoc_path):
         with open(labordoc_path, "r", encoding="utf-8-sig") as f:

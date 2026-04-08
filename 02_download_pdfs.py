@@ -24,6 +24,7 @@ Usage:
 """
 
 import asyncio
+import glob
 import os
 import sys
 import random
@@ -33,11 +34,23 @@ from playwright.async_api import async_playwright
 import requests
 from PyPDF2 import PdfReader
 
+
+def _find_labordoc_csv():
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ilo_labordoc_metadata_DATE.csv)."""
+    matches = sorted(glob.glob("ilo_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
+    if not matches:
+        raise FileNotFoundError(
+            "No ilo_labordoc_metadata_DATE.csv found in the current directory. "
+            "Run Step 1 first, or set METADATA_CSV manually below."
+        )
+    return matches[0]
+
+
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
-METADATA_CSV      = "ilo_labordoc_metadata_MAR2026.csv"   # CSV from Step 1 (must have Main URL + Alternative URL columns)
-PDF_OUTPUT_FOLDER = "pdf_downloads"       # Folder where PDFs are saved
-REPORTS_FOLDER    = "download_reports"    # Folder for per-batch success/failure logs
-BATCH_SIZE        = 5000                  # Save progress every N rows
+METADATA_CSV      = _find_labordoc_csv()   # Auto-detected from Step 1 output (ilo_labordoc_metadata_DATE.csv)
+PDF_OUTPUT_FOLDER = "pdf_downloads"        # Folder where PDFs are saved
+REPORTS_FOLDER    = "download_reports"     # Folder for per-batch success/failure logs
+BATCH_SIZE        = 5000                   # Save progress every N rows
 
 # ── PDF VALIDATION ─────────────────────────────────────────────────────────────
 def validate_pdf_file(pdf_path):

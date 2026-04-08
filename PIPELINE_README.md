@@ -34,12 +34,14 @@ python -m playwright install chromium   # for PDF downloading via browser automa
 ## Pipeline overview
 
 ```
-Step 1  01_collect_metadata.py      Query ILO API → ilo_labordoc_metadata_MAR2026.csv
+Step 1  01_collect_metadata.py      Query ILO API → ilo_labordoc_metadata_DATE.csv
 Step 2  02_download_pdfs.py         Download PDFs → pdf_downloads/
 Step 3  03_extract_text_to_json.py  Extract text, detect English → json_output/
 Step 4  04_build_and_verify.py      Build corpus metadata CSV + verify alignment across all three sources
 Step 5  05_format_sketchengine.py   (optional) JSON → XML → sketchengine_xml/
 ```
+
+> **DATE** in filenames is automatically populated with the date the script is run (e.g. `08APR2026`). Steps 2, 3, and 4 auto-detect the `ilo_labordoc_metadata_DATE.csv` produced by Step 1, so no manual filename configuration is needed when running the pipeline in sequence.
 
 ---
 
@@ -55,7 +57,9 @@ Queries the ILO Alma SRU API year by year and saves bibliographic metadata for a
 ```python
 START_YEAR = 1900   # first year to collect
 END_YEAR   = 2024   # last year to collect
-OUTPUT_CSV = "ilo_labordoc_metadata_MAR2026.csv"
+# OUTPUT_CSV is set automatically — no configuration needed:
+# OUTPUT_CSV = f"ilo_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"
+# e.g. ilo_labordoc_metadata_08APR2026.csv
 ```
 
 **Run:**
@@ -63,7 +67,7 @@ OUTPUT_CSV = "ilo_labordoc_metadata_MAR2026.csv"
 python 01_collect_metadata.py
 ```
 
-**Output:** `ilo_labordoc_metadata_MAR2026.csv` — one row per catalogue record, 24 columns including Record ID, title, URLs, publication date, author, subject, and Ilo Name (the ILO's internal call number, used for PDF filename matching in later steps).
+**Output:** `ilo_labordoc_metadata_DATE.csv` — one row per catalogue record, 24 columns including Record ID, title, URLs, publication date, author, subject, and Ilo Name (the ILO's internal call number, used for PDF filename matching in later steps).
 
 > **API pagination:** The ILO Alma SRU API limits responses to 50 records per request. To ensure comprehensive coverage the script works around this by querying one year at a time and paginating through all 50-record batches within each year until all records for that year are retrieved. This is why the script is structured by year — without this approach, records beyond the first 50 per query would be silently missed. The API returns records in MARCXML format; the script parses this and maps the relevant MARC fields to a flat CSV structure.
 
@@ -89,8 +93,8 @@ Downloaded files are validated with PyPDF2; any file that fails validation is de
 
 **Configure** (top of script):
 ```python
-METADATA_CSV      = "ilo_labordoc_metadata_MAR2026.csv"   # input: output of Step 1
-PDF_OUTPUT_FOLDER = "pdf_downloads"       # where PDFs are saved
+METADATA_CSV      = _find_labordoc_csv()   # auto-detected: ilo_labordoc_metadata_DATE.csv from Step 1
+PDF_OUTPUT_FOLDER = "pdf_downloads"        # where PDFs are saved
 ```
 
 **Run:**
@@ -116,14 +120,14 @@ python 02_download_pdfs.py
 For each PDF in `pdf_downloads/`:
 1. Extracts text using PyMuPDF
 2. Detects the language using `langdetect` — skips documents where English confidence falls below the threshold
-3. Matches metadata from `ilo_labordoc_metadata_MAR2026.csv` using the filename (Record ID or Ilo Name)
+3. Matches metadata from `ilo_labordoc_metadata_DATE.csv` (auto-detected from Step 1 output) using the filename (Record ID or Ilo Name)
 4. Saves a `.json` file containing the extracted text and matched metadata
 
 **Configure** (top of script):
 ```python
 PDF_FOLDER         = "pdf_downloads"     # input: output of Step 2
 JSON_OUTPUT_FOLDER = "json_output"       # where JSON files are saved
-METADATA_CSV       = "ilo_labordoc_metadata_MAR2026.csv"  # metadata for matching
+METADATA_CSV       = _find_labordoc_csv()  # auto-detected: ilo_labordoc_metadata_DATE.csv from Step 1
 ENGLISH_THRESHOLD  = 0.80                # minimum English confidence (0–1)
 ```
 
@@ -151,20 +155,20 @@ This script does three things in sequence:
 
 **1. Scan** — reads your JSON files (Step 3) or SketchEngine XML files (Step 5) and extracts the Record ID and metadata for every document that made it into your corpus. JSON is preferred as the source if both are present.
 
-**2. Build** — writes `ilo_corpus_metadata_NEW.csv`: one row per corpus document with all available metadata fields. Also stamps `IN_CORPUS=YES` in `ilo_labordoc_metadata_MAR2026.csv` for every record present in your corpus, and `IN_CORPUS=NO` for all others.
+**2. Build** — writes `ilo_corpus_metadata_DATE.csv`: one row per corpus document with all available metadata fields. Also stamps `IN_CORPUS=YES` in `ilo_labordoc_metadata_DATE.csv` for every record present in your corpus, and `IN_CORPUS=NO` for all others.
 
 **3. Verify** — runs cross-checks across all three sources to confirm they are fully aligned:
-- Source file count (JSON/XML) == `ilo_corpus_metadata_NEW.csv` rows == `ilo_labordoc_metadata_MAR2026.csv` IN_CORPUS=YES
+- Source file count (JSON/XML) == `ilo_corpus_metadata_DATE.csv` rows == `ilo_labordoc_metadata_DATE.csv` IN_CORPUS=YES
 - All Record IDs consistent across all three sources
 - No malformed publication dates in corpus metadata
 - If both JSON and XML exist, their document counts match
 
 **Configure** (top of script):
 ```python
-JSON_FOLDER      = "json_output"                        # Step 3 output (preferred source)
-XML_FOLDER       = "sketchengine_xml"                   # Step 5 output (used if no JSON)
-ILO_LABORDOC_CSV = "ilo_labordoc_metadata_MAR2026.csv"  # Full metadata from Step 1
-CORPUS_OUT_CSV   = "ilo_corpus_metadata_NEW.csv"        # Created by this script
+JSON_FOLDER      = "json_output"           # Step 3 output (preferred source)
+XML_FOLDER       = "sketchengine_xml"      # Step 5 output (used if no JSON)
+ILO_LABORDOC_CSV = _find_labordoc_csv()    # auto-detected: ilo_labordoc_metadata_DATE.csv from Step 1
+CORPUS_OUT_CSV   = f"ilo_corpus_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"  # auto-dated output
 ```
 
 **Run:**
@@ -173,8 +177,8 @@ python 04_build_and_verify.py
 ```
 
 **Output:**
-- `ilo_corpus_metadata_NEW.csv` — corpus metadata, one row per document
-- `ilo_labordoc_metadata_MAR2026.csv` — updated in place with `IN_CORPUS` flag
+- `ilo_corpus_metadata_DATE.csv` — corpus metadata, one row per document
+- `ilo_labordoc_metadata_DATE.csv` — updated in place with `IN_CORPUS` flag
 - PASS/FAIL verification report printed to console
 
 ---

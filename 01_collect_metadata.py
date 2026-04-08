@@ -4,7 +4,8 @@ ILO Corpus Pipeline — Step 1: Collect Metadata from ILO API
 Queries the ILO Alma SRU API year by year and collects bibliographic metadata
 for all English-language ILO publications.
 
-Output: ilo_labordoc_metadata_MAR2026.csv  (~128k rows for 1900–2024)
+Output: ilo_labordoc_metadata_DATE.csv  (~128k rows for 1900–2024)
+        DATE is automatically set to the date the script is run (e.g. 08APR2026)
 
 Dependencies:
     pip install requests pandas openpyxl
@@ -15,6 +16,7 @@ Usage:
 """
 
 import sys
+from datetime import datetime
 import requests
 import xml.etree.ElementTree as ET
 import pandas as pd
@@ -22,7 +24,7 @@ import pandas as pd
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 START_YEAR  = 1900   # First publication year to collect
 END_YEAR    = 2024   # Last publication year to collect (inclusive)
-OUTPUT_CSV  = "ilo_labordoc_metadata_MAR2026.csv"   # Output file name
+OUTPUT_CSV  = f"ilo_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"   # Auto-dated output (e.g. ilo_labordoc_metadata_08APR2026.csv)
 
 # ILO Alma SRU API endpoint — queries English ILO publications by year
 BASE_URL = (
