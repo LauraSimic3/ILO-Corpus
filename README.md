@@ -1,6 +1,6 @@
 # ILO Corpus
 
-A century-scale corpus of English-language International Labour Organisation (ILO) publications, built from the ILO Labordoc catalogue API. The corpus comprises **53,830 documents** spanning **1919–2024**, totalling over 916 million words, and is designed to support large-scale computational analysis of ILO institutional discourse.
+A century-scale corpus of English-language International Labour Organization (ILO) publications, built from the ILO Labordoc catalogue API. The corpus comprises **53,830 documents** spanning **1919–2024**, totalling over 916 million words, and is designed to support large-scale computational analysis of ILO institutional discourse.
 
 This repository provides the pipeline used to construct the corpus, shared metadata files, and documentation to enable replication and adaptation.
 
