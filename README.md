@@ -42,9 +42,13 @@ This repository provides the pipeline used to construct the corpus, shared metad
 See [PIPELINE_README.md](PIPELINE_README.md) for full instructions.
 
 **Requirements:**
+
+A virtual environment is recommended to avoid dependency conflicts:
 ```
-Python 3.9+
-pip install requests pandas pymupdf langdetect tqdm PyPDF2 openpyxl
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
+pip install -r requirements.txt
 python -m playwright install chromium
 ```
 

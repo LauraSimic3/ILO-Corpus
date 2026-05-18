@@ -33,7 +33,8 @@ from pathlib import Path
 
 import fitz          # PyMuPDF
 import pandas as pd
-from langdetect import detect_langs, LangDetectException
+from langdetect import detect_langs, LangDetectException, DetectorFactory
+DetectorFactory.seed = 0
 from tqdm import tqdm
 
 
@@ -110,7 +111,7 @@ def load_metadata(csv_path):
 
 # ── TEXT EXTRACTION ────────────────────────────────────────────────────────────
 def extract_text(pdf_path):
-    """Extract text from PDF using PyMuPDF. Limited to 1,000 pages."""
+    """Extract text from all pages of a PDF using PyMuPDF."""
     doc = fitz.open(pdf_path)
     parts = []
     for page_num in range(len(doc)):

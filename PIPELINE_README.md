@@ -23,9 +23,13 @@ This repository accompanies the data paper:
 
 ## Requirements
 
+A virtual environment is recommended to avoid dependency conflicts:
+
 ```
-Python 3.9+
-pip install requests pandas pymupdf langdetect tqdm PyPDF2 openpyxl
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
+pip install -r requirements.txt
 python -m playwright install chromium   # for PDF downloading via browser automation
 ```
 
@@ -111,6 +115,8 @@ python 02_download_pdfs.py
 
 > **Resumable:** The script processes rows in batches of 5,000 and saves progress after each batch. If interrupted, you can re-run it; already-downloaded PDFs are not re-downloaded (the JSON skip logic in Step 3 handles duplicates).
 
+> **Resource estimates (full 1900–2024 run):** ~200 GB disk space for downloaded PDFs. Runtime varies substantially depending on network speed and how many records require browser automation (Method 2); expect multiple days for a full run. The script is resumable, so it can be run in sessions.
+
 ---
 
 ### Step 3 — Extract text and save as JSON
@@ -140,6 +146,8 @@ python 03_extract_text_to_json.py
 - `json_output/` — one `.pdf.json` file per accepted English document
 - `extract_log_<timestamp>.log` — full processing log
 - `extract_failures_<timestamp>.log` — skipped files with reason (not English / no text / error)
+
+> **Resource estimates (full run):** ~50 GB disk space for JSON output. Processing ~53,000 PDFs takes several hours on a standard machine (single-threaded).
 
 > **The English threshold** of 0.80 means at least 80% of the detected text must be classified as English. Documents below this threshold are skipped and logged. Adjust this value if your corpus has different language requirements.
 
