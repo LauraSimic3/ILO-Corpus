@@ -147,7 +147,7 @@ python 03_extract_text_to_json.py
 - `extract_log_<timestamp>.log` — full processing log
 - `extract_failures_<timestamp>.log` — skipped files with reason (not English / no text / error)
 
-> **Resource estimates (full run):** ~50 GB disk space for JSON output. Processing ~53,000 PDFs takes several hours on a standard machine (single-threaded).
+> **Resource estimates (full run):** ~7–10 GB disk space for JSON output. Processing ~53,000 PDFs takes several hours on a standard machine (single-threaded).
 
 > **The English threshold** of 0.80 means at least 80% of the detected text must be classified as English. Documents below this threshold are skipped and logged. Adjust this value if your corpus has different language requirements.
 
