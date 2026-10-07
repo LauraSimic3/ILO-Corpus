@@ -3,7 +3,10 @@ ILO Corpus Pipeline — Step 5 (OPTIONAL): Format JSON Files for SketchEngine
 =============================================================================
 Converts the JSON files produced by Step 3 into SketchEngine vertical corpus
 XML format: each document becomes a <doc> element with metadata as attributes,
-containing <p> paragraph elements and <s> sentence elements.
+containing <p> and <s> elements. <p> elements are page-level segments (the text
+is split at the blank lines Script 3 leaves between pages), so each <p> is
+approximately one PDF page, not a paragraph. <s> elements are sentences split
+by a simple punctuation rule (see split_sentences), so boundaries are approximate.
 
 Output files are split to stay under 500 MB each (SketchEngine upload limit).
 Output filenames follow the pattern: ILO_Corpus_Batch_01.xml, _02.xml, etc.
@@ -57,6 +60,8 @@ def clean_attr(value):
     if not value or str(value).strip().lower() in ("", "nan"):
         return ""
     value = str(value).strip()
+    # Escape XML special characters in attribute values; "&" must be replaced first
+    value = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     value = value.replace('"', "&quot;").replace("'", "&apos;")
     value = value.replace("\n", " ").replace("\r", " ")
     return " ".join(value.split())
@@ -120,6 +125,7 @@ def json_to_xml_lines(json_path):
     doc_tag = "<doc " + " ".join(attrs) + ">" if attrs else "<doc>"
     lines   = [doc_tag]
 
+    # Each blank-line-separated block is one page-level segment, written as <p>
     for para in text_content.split("\n\n"):
         para = para.strip()
         if not para or len(para) < 10:

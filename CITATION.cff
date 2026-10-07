@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use these scripts or metadata files, please cite the accompanying paper (full citation forthcoming)."
+title: "ILO Corpus pipeline and metadata (MAR2026)"
+version: MAR2026
+authors:
+  - family-names: Simic
+    given-names: Laura
+repository-code: "https://github.com/LauraSimic3/ILO-Corpus"
+license: MIT
+# TODO: add preferred-citation (the data paper) once the citation is available.

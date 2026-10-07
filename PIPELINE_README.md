@@ -1,6 +1,6 @@
 # ILO Corpus Pipeline
 
-A reproducible pipeline for building a corpus of English-language International Labour Organisation (ILO) documents from the available ILO Labordoc catalogue API.
+A reproducible pipeline for building a corpus of International Labour Organisation (ILO) documents (English-language in the released corpus) from the available ILO Labordoc catalogue API.
 
 This repository accompanies the data paper:
 > *[Full citation to be added on publication]*
@@ -11,13 +11,13 @@ This repository accompanies the data paper:
 
 | Artefact | Description |
 |---|---|
-| `ilo_labordoc_metadata_DATE.csv` | Full bibliographic metadata for ILO catalogue records depending on parameters set |
-| `ilo_corpus_metadata_DATE.csv` | Curated subset — the documents actually downloaded and included in the corpus |
+| `ILO_labordoc_metadata_DATE.csv` | Full bibliographic metadata for ILO catalogue records depending on parameters set |
+| `ILO_Corpus_metadata_DATE.csv` | Curated subset — the documents actually downloaded and included in the corpus |
 | PDF files | Downloaded from ILO Labordoc (not shared — see copyright note below) |
 | JSON files | Extracted plain text + metadata per document |
 | SketchEngine XML *(optional)* | Corpus in SketchEngine vertical format |
 
-> **Copyright note:** PDF files and XML corpus files are not shared in this repository because the ILO retains copyright over its publications. The metadata files (`ilo_labordoc_metadata_MAR2026.csv` and `ilo_corpus_metadata_MAR2026.csv`) are shared so that others can assess the scope of the corpus and replicate or adapt the collection for their own purposes.
+> **Copyright note:** PDF files and XML corpus files are not shared in this repository because the ILO retains copyright over its publications. The metadata files (`ILO_labordoc_metadata_MAR2026.csv` and `ILO_Corpus_metadata_MAR2026.csv`) are shared so that others can assess the scope of the corpus and replicate or adapt the collection for their own purposes.
 
 ---
 
@@ -38,14 +38,14 @@ python -m playwright install chromium   # for PDF downloading via browser automa
 ## Pipeline overview
 
 ```
-Step 1  01_collect_metadata.py      Query ILO API → ilo_labordoc_metadata_DATE.csv
+Step 1  01_collect_metadata.py      Query ILO API → ILO_labordoc_metadata_DATE.csv
 Step 2  02_download_pdfs.py         Download PDFs → pdf_downloads/
 Step 3  03_extract_text_to_json.py  Extract text, detect English → json_output/
 Step 4  04_build_and_verify.py      Build corpus metadata CSV + verify alignment across all three sources
 Step 5  05_format_sketchengine.py   (optional) JSON → XML → sketchengine_xml/
 ```
 
-> **DATE** in filenames is automatically populated with the date the script is run (e.g. `08APR2026`). Steps 2, 3, and 4 auto-detect the `ilo_labordoc_metadata_DATE.csv` produced by Step 1, so no manual filename configuration is needed when running the pipeline in sequence.
+> **DATE** in filenames is automatically populated with the date the script is run (e.g. `08APR2026`). Steps 2, 3, and 4 auto-detect the `ILO_labordoc_metadata_DATE.csv` produced by Step 1, so no manual filename configuration is needed when running the pipeline in sequence.
 
 ---
 
@@ -55,15 +55,16 @@ Step 5  05_format_sketchengine.py   (optional) JSON → XML → sketchengine_xml
 
 **Script:** `01_collect_metadata.py`
 
-Queries the ILO Alma SRU API year by year and saves bibliographic metadata for all English-language ILO publications.
+Queries the ILO Alma SRU API one publication year per request and saves bibliographic metadata for ILO publications. By default records in **all languages** are collected; set `LANGUAGE_FILTER` (for example `"eng"`) to collect one language only. Duplicate Record IDs are removed before saving, and `Year` is taken from each record's own publication date (the harvest year is used only when the date has no year).
 
 **Configure** (top of script):
 ```python
 START_YEAR = 1900   # first year to collect
 END_YEAR   = 2024   # last year to collect
+LANGUAGE_FILTER = None   # None = all languages; or e.g. "eng", "fre", "spa"
 # OUTPUT_CSV is set automatically — no configuration needed:
-# OUTPUT_CSV = f"ilo_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"
-# e.g. ilo_labordoc_metadata_08APR2026.csv
+# OUTPUT_CSV = f"ILO_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"
+# e.g. ILO_labordoc_metadata_08APR2026.csv
 ```
 
 **Run:**
@@ -71,11 +72,11 @@ END_YEAR   = 2024   # last year to collect
 python 01_collect_metadata.py
 ```
 
-**Output:** `ilo_labordoc_metadata_DATE.csv` — one row per catalogue record, 24 columns including Record ID, title, URLs, publication date, author, subject, and Ilo Name (the ILO's internal call number, used for PDF filename matching in later steps).
+**Output:** `ILO_labordoc_metadata_DATE.csv` — one row per catalogue record, 24 columns including Record ID, title, URLs, publication date, author, subject, and Ilo Name (the ILO's internal call number, used for PDF filename matching in later steps).
 
 > **API pagination:** The ILO Alma SRU API limits responses to 50 records per request. To ensure comprehensive coverage the script works around this by querying one year at a time and paginating through all 50-record batches within each year until all records for that year are retrieved. This is why the script is structured by year — without this approach, records beyond the first 50 per query would be silently missed. The API returns records in MARCXML format; the script parses this and maps the relevant MARC fields to a flat CSV structure.
 
-> The full 1900–2024 collection produces approximately 128,000 rows and takes several hours to run. You can restrict `START_YEAR`/`END_YEAR` to collect a subset by date range.
+> The released all-language file holds 128,584 rows (128,580 unique Record IDs; `Year` values 1919–2026). A full harvest takes several hours to run. You can restrict `START_YEAR`/`END_YEAR` to collect a subset by date range.
 
 ---
 
@@ -97,7 +98,7 @@ Downloaded files are validated with PyPDF2; any file that fails validation is de
 
 **Configure** (top of script):
 ```python
-METADATA_CSV      = _find_labordoc_csv()   # auto-detected: ilo_labordoc_metadata_DATE.csv from Step 1
+METADATA_CSV      = _find_labordoc_csv()   # auto-detected: ILO_labordoc_metadata_DATE.csv from Step 1
 PDF_OUTPUT_FOLDER = "pdf_downloads"        # where PDFs are saved
 ```
 
@@ -126,14 +127,14 @@ python 02_download_pdfs.py
 For each PDF in `pdf_downloads/`:
 1. Extracts text using PyMuPDF
 2. Detects the language using `langdetect` — skips documents where English confidence falls below the threshold
-3. Matches metadata from `ilo_labordoc_metadata_DATE.csv` (auto-detected from Step 1 output) using the filename (Record ID or Ilo Name)
+3. Matches metadata from `ILO_labordoc_metadata_DATE.csv` (auto-detected from Step 1 output) using the filename (Record ID or Ilo Name)
 4. Saves a `.json` file containing the extracted text and matched metadata
 
 **Configure** (top of script):
 ```python
 PDF_FOLDER         = "pdf_downloads"     # input: output of Step 2
 JSON_OUTPUT_FOLDER = "json_output"       # where JSON files are saved
-METADATA_CSV       = _find_labordoc_csv()  # auto-detected: ilo_labordoc_metadata_DATE.csv from Step 1
+METADATA_CSV       = _find_labordoc_csv()  # auto-detected: ILO_labordoc_metadata_DATE.csv from Step 1
 ENGLISH_THRESHOLD  = 0.80                # minimum English confidence (0–1)
 ```
 
@@ -149,7 +150,7 @@ python 03_extract_text_to_json.py
 
 > **Resource estimates (full run):** ~7–10 GB disk space for JSON output. Processing ~53,000 PDFs takes several hours on a standard machine (single-threaded).
 
-> **The English threshold** of 0.80 means at least 80% of the detected text must be classified as English. Documents below this threshold are skipped and logged. Adjust this value if your corpus has different language requirements.
+> **The English threshold** of 0.80 means the `langdetect` English probability for the first 10,000 characters of the extracted text must be at least 0.80. This is one decision per document: documents below the threshold are skipped and logged, and passages in other languages elsewhere in a retained document are kept. Adjust this value if your corpus has different language requirements.
 
 > **Metadata matching:** Because PDFs are named by Record ID in Step 2, each file is matched directly to its metadata row. Match failures should not occur under normal circumstances.
 
@@ -163,10 +164,10 @@ This script does three things in sequence:
 
 **1. Scan** — reads your JSON files (Step 3) or SketchEngine XML files (Step 5) and extracts the Record ID and metadata for every document that made it into your corpus. JSON is preferred as the source if both are present.
 
-**2. Build** — writes `ilo_corpus_metadata_DATE.csv`: one row per corpus document with all available metadata fields. Also stamps `IN_CORPUS=YES` in `ilo_labordoc_metadata_DATE.csv` for every record present in your corpus, and `IN_CORPUS=NO` for all others.
+**2. Build** — writes `ILO_Corpus_metadata_DATE.csv`: one row per corpus document with all available metadata fields. Also stamps `IN_CORPUS=YES` in `ILO_labordoc_metadata_DATE.csv` for every record present in your corpus, and `IN_CORPUS=NO` for all others.
 
 **3. Verify** — runs cross-checks across all three sources to confirm they are fully aligned:
-- Source file count (JSON/XML) == `ilo_corpus_metadata_DATE.csv` rows == `ilo_labordoc_metadata_DATE.csv` IN_CORPUS=YES
+- Source file count (JSON/XML) == `ILO_Corpus_metadata_DATE.csv` rows == `ILO_labordoc_metadata_DATE.csv` IN_CORPUS=YES
 - All Record IDs consistent across all three sources
 - No malformed publication dates in corpus metadata
 - If both JSON and XML exist, their document counts match
@@ -175,8 +176,8 @@ This script does three things in sequence:
 ```python
 JSON_FOLDER      = "json_output"           # Step 3 output (preferred source)
 XML_FOLDER       = "sketchengine_xml"      # Step 5 output (used if no JSON)
-ILO_LABORDOC_CSV = _find_labordoc_csv()    # auto-detected: ilo_labordoc_metadata_DATE.csv from Step 1
-CORPUS_OUT_CSV   = f"ilo_corpus_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"  # auto-dated output
+ILO_LABORDOC_CSV = _find_labordoc_csv()    # auto-detected: ILO_labordoc_metadata_DATE.csv from Step 1
+CORPUS_OUT_CSV   = f"ILO_Corpus_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"  # auto-dated output
 ```
 
 **Run:**
@@ -185,8 +186,8 @@ python 04_build_and_verify.py
 ```
 
 **Output:**
-- `ilo_corpus_metadata_DATE.csv` — corpus metadata, one row per document
-- `ilo_labordoc_metadata_DATE.csv` — updated in place with `IN_CORPUS` flag
+- `ILO_Corpus_metadata_DATE.csv` — corpus metadata, one row per document
+- `ILO_labordoc_metadata_DATE.csv` — updated in place with `IN_CORPUS` flag
 - PASS/FAIL verification report printed to console
 
 ---
@@ -195,7 +196,7 @@ python 04_build_and_verify.py
 
 **Script:** `05_format_sketchengine.py`
 
-Converts the JSON files from Step 3 into SketchEngine vertical corpus XML format. Each document becomes a `<doc>` element with metadata stored as XML attributes, containing `<p>` (paragraph) and `<s>` (sentence) child elements.
+Converts the JSON files from Step 3 into SketchEngine vertical corpus XML format. Each document becomes a `<doc>` element with metadata stored as XML attributes, containing `<p>` (page-level segment, approximately a PDF page) and `<s>` (sentence) child elements. `<p>` elements are created at the blank lines Script 3 leaves between pages, so they are **not** paragraphs; `<s>` elements come from a punctuation rule (split after `.`, `!` or `?` followed by whitespace and a capital letter), so sentence boundaries are approximate. `&`, `<`, `>` and quotation marks in metadata attribute values are escaped.
 
 Output is split into multiple files to stay under the SketchEngine 500 MB per-file upload limit.
 
@@ -224,7 +225,7 @@ Two metadata files are shared alongside this pipeline and are available directly
 
 | File | Size | Rows | Description |
 |---|---|---|---|
-| `ILO_labordoc_metadata_MAR2026.csv` | 115 MB | ~128,000 | Raw API output: all English ILO catalogue records 1900–2024. **Do not overwrite** — this is the authoritative source. |
+| `ILO_labordoc_metadata_MAR2026.csv` | 115 MB | 128,584 | Labordoc catalogue records in **all languages** (`Year` 1919–2026); four Record IDs appear twice. Includes columns added during the original build (see README, "Provenance of released files"). **Do not overwrite** — this is the authoritative source. |
 | `ILO_Corpus_metadata_MAR2026.csv` | 39 MB | 53,830 | Curated subset: documents that were successfully downloaded, passed English detection, and were included in the final corpus. Publication dates have been cleaned (brackets removed, Arabic digits converted, Year field used as fallback). |
 
 > **Downloading:** Because these files are stored via Git LFS, cloning the repository with a standard `git clone` will download them automatically if Git LFS is installed (`git lfs install` then `git clone ...`). Alternatively, download them individually from the GitHub interface using the Download button on each file's page.
@@ -252,10 +253,8 @@ If you use this pipeline or the metadata files, please cite:
 
 ---
 
-## Licence
+## Licence and terms
 
-The pipeline scripts are released under the MIT Licence.
-
-The metadata files (`ilo_labordoc_metadata_MAR2026.csv`, `ilo_corpus_metadata_MAR2026.csv`) are derived from the ILO Labordoc catalogue API and are shared here for research and reproducibility purposes. Users should satisfy themselves with the ILO's terms of use before any further redistribution.
-
-PDF files and XML corpus files contain extracted text from ILO publications and are subject to ILO copyright. They are not shared in this repository.
+- The pipeline scripts and documentation are licensed under the MIT Licence (see `LICENSE`).
+- The metadata files derive from the ILO Labordoc catalogue, and the ILO's terms apply: <https://www.ilo.org/rights-and-permissions>.
+- ILO documents (PDF files, extracted text and XML corpus files) remain under ILO copyright and are not distributed.
