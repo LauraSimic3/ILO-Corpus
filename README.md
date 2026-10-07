@@ -25,7 +25,7 @@ This repository provides the pipeline used to construct the corpus, shared metad
 | `ILO_labordoc_metadata_MAR2026.csv` | Labordoc catalogue metadata, all languages (128,584 rows; Year 1919–2026) — via Git LFS |
 | `ILO_Corpus_metadata_MAR2026.csv` | Corpus subset metadata: the 53,830 English records dated 1919–2024 — via Git LFS |
 | `PIPELINE_README.md` | Full step-by-step pipeline documentation |
-| `CHANGELOG.md` | Changes in this release |
+| `CHANGELOG.md` | Future changes will be logged here |
 
 ---
 
