@@ -39,11 +39,11 @@ from tqdm import tqdm
 
 
 def _find_labordoc_csv():
-    """Auto-detect the labordoc metadata CSV produced by Step 1 (ilo_labordoc_metadata_DATE.csv)."""
-    matches = sorted(glob.glob("ilo_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv)."""
+    matches = sorted(glob.glob("ILO_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
     if not matches:
         raise FileNotFoundError(
-            "No ilo_labordoc_metadata_DATE.csv found in the current directory. "
+            "No ILO_labordoc_metadata_DATE.csv found in the current directory. "
             "Run Step 1 first, or set METADATA_CSV manually below."
         )
     return matches[0]
@@ -52,7 +52,7 @@ def _find_labordoc_csv():
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 PDF_FOLDER         = "pdf_downloads"     # Folder containing downloaded PDFs (Step 2 output)
 JSON_OUTPUT_FOLDER = "json_output"       # Where JSON files are saved
-METADATA_CSV       = _find_labordoc_csv()  # Auto-detected from Step 1 output (ilo_labordoc_metadata_DATE.csv)
+METADATA_CSV       = _find_labordoc_csv()  # Auto-detected from Step 1 output (ILO_labordoc_metadata_DATE.csv)
 ENGLISH_THRESHOLD  = 0.80                # Minimum English confidence (0–1)
 
 _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -152,18 +152,18 @@ def is_english(text, threshold=ENGLISH_THRESHOLD):
 
 # ── FILENAME PARSING ───────────────────────────────────────────────────────────
 def record_id_from_filename(filename):
-    """Extract 15-digit ILO Record ID from PDF filename if present."""
+    """Extract the ILO Record ID (12-15 digits) from PDF filename if present."""
     name = filename.replace(".pdf", "").replace(".json", "")
     # Handle duplicated IDs: 995671157002676_995671157002676
     if "_" in name:
         parts = name.split("_")
         if len(parts) == 2 and parts[0] == parts[1]:
             name = parts[0]
-        elif parts[0].isdigit() and len(parts[0]) == 15:
+        elif parts[0].isdigit() and 12 <= len(parts[0]) <= 15:
             name = parts[0]
     if name.replace(".0", "").isdigit():
         name = name.split(".0")[0]
-    if name.isdigit() and len(name) == 15:
+    if name.isdigit() and 12 <= len(name) <= 15:
         try:
             return int(name)
         except ValueError:

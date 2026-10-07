@@ -1,6 +1,6 @@
 requests==2.32.3
 pandas==2.2.3
-pymupdf==1.24.11   # verify with: pip show PyMuPDF in the env you ran the pipeline in
+pymupdf==1.27.2.3   # version named in the paper. Newer versions should work but may change page-break detail in extracted text, which affects <p> segments in Script 5.
 langdetect==1.0.9
 tqdm==4.67.1
 PyPDF2==3.0.1

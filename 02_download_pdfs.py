@@ -36,18 +36,18 @@ from PyPDF2 import PdfReader
 
 
 def _find_labordoc_csv():
-    """Auto-detect the labordoc metadata CSV produced by Step 1 (ilo_labordoc_metadata_DATE.csv)."""
-    matches = sorted(glob.glob("ilo_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv)."""
+    matches = sorted(glob.glob("ILO_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
     if not matches:
         raise FileNotFoundError(
-            "No ilo_labordoc_metadata_DATE.csv found in the current directory. "
+            "No ILO_labordoc_metadata_DATE.csv found in the current directory. "
             "Run Step 1 first, or set METADATA_CSV manually below."
         )
     return matches[0]
 
 
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
-METADATA_CSV      = _find_labordoc_csv()   # Auto-detected from Step 1 output (ilo_labordoc_metadata_DATE.csv)
+METADATA_CSV      = _find_labordoc_csv()   # Auto-detected from Step 1 output (ILO_labordoc_metadata_DATE.csv)
 PDF_OUTPUT_FOLDER = "pdf_downloads"        # Folder where PDFs are saved
 REPORTS_FOLDER    = "download_reports"     # Folder for per-batch success/failure logs
 BATCH_SIZE        = 5000                   # Save progress every N rows

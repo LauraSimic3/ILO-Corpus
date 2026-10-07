@@ -1,10 +1,11 @@
 """
 ILO Corpus Pipeline — Step 1: Collect Metadata from ILO API
 ============================================================
-Queries the ILO Alma SRU API year by year and collects bibliographic metadata
-for all English-language ILO publications.
+Queries the ILO Alma SRU API one publication year at a time and collects
+bibliographic metadata for ILO publications. By default records in all
+languages are collected (see LANGUAGE_FILTER below).
 
-Output: ilo_labordoc_metadata_DATE.csv  (~128k rows for 1900–2024)
+Output: ILO_labordoc_metadata_DATE.csv  (one row per unique Record ID)
         DATE is automatically set to the date the script is run (e.g. 08APR2026)
 
 Dependencies:
@@ -15,6 +16,7 @@ Usage:
     Adjust START_YEAR / END_YEAR below before running.
 """
 
+import re
 import sys
 from datetime import datetime
 import requests
@@ -24,22 +26,34 @@ import pandas as pd
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 START_YEAR  = 1900   # First publication year to collect
 END_YEAR    = 2024   # Last publication year to collect (inclusive)
-OUTPUT_CSV  = f"ilo_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"   # Auto-dated output (e.g. ilo_labordoc_metadata_08APR2026.csv)
+OUTPUT_CSV  = f"ILO_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"   # Auto-dated output (e.g. ILO_labordoc_metadata_08APR2026.csv)
 
-# ILO Alma SRU API endpoint — queries English ILO publications by year
+# Language filter applied in the API query. None (default) = no filter, so records
+# in all languages are collected (this reproduces the released all-language file).
+# To collect one language only, set a three-letter MARC language code, e.g.:
+#     LANGUAGE_FILTER = "eng"   # English   (also "fre" French, "spa" Spanish)
+# Note: the API matches records that list that language among their languages, so
+# multilingual records such as "eng | fre | spa" are included for "eng".
+LANGUAGE_FILTER = None
+
+# ILO Alma SRU API endpoint — queries ILO publications for ONE publication year
+# per request (main_pub_date >= year AND <= year), so years do not overlap.
 BASE_URL = (
     "https://ilo.alma.exlibrisgroup.com/view/sru/41ILO_INST"
     "?version=1.2&operation=searchRetrieve&recordSchema=marcxml"
     "&maximumRecords=50&startRecord={start}"
-    "&query=alma.subjects=%22ILO%20pub%22%20AND%20alma.language=%22eng%22"
+    "&query=alma.subjects=%22ILO%20pub%22{language_clause}"
     "%20AND%20alma.main_pub_date%3E%3D%22{year}%22"
-    "%20AND%20alma.main_pub_date%3C%3D%22{next_year}%22"
+    "%20AND%20alma.main_pub_date%3C%3D%22{year}%22"
     "&sortBy=alma.main_pub_date/sort.ascending"
 )
 
 # ── API FETCHING ───────────────────────────────────────────────────────────────
 def fetch_records(year, start=1):
-    url = BASE_URL.format(start=start, year=year, next_year=year + 1)
+    language_clause = (
+        f"%20AND%20alma.language=%22{LANGUAGE_FILTER}%22" if LANGUAGE_FILTER else ""
+    )
+    url = BASE_URL.format(start=start, year=year, language_clause=language_clause)
     response = requests.get(url, timeout=30)
     response.raise_for_status()
     return ET.fromstring(response.content)
@@ -50,6 +64,12 @@ def get_subfield(record, tag, code, ns):
         f".//marc:datafield[@tag='{tag}']/marc:subfield[@code='{code}']", ns
     )
     return field.text if field is not None else ""
+
+
+def year_from_date(date_text, fallback):
+    """Year from the record's own publication date (e.g. '[1950?]', 'c1950'); fallback if none."""
+    m = re.search(r"(?<!\d)(1[5-9]\d{2}|20\d{2})(?!\d)", date_text or "")
+    return int(m.group(1)) if m else fallback
 
 
 def parse_marcxml(record_elem, record_identifier):
@@ -117,7 +137,7 @@ def collect_year_metadata(year):
             marc_record = rec.find(".//{http://www.loc.gov/MARC21/slim}record")
             if marc_record is not None:
                 data = parse_marcxml(marc_record, record_identifier)
-                data["Year"] = year
+                data["Year"] = year_from_date(data["Publication Date"], year)
                 all_records.append(data)
 
         print(f"  {year}: {len(all_records)} / {total_records}")
@@ -145,7 +165,11 @@ if __name__ == "__main__":
 
     if final_records:
         df = pd.DataFrame(final_records)
+        n_before = len(df)
+        df = df.drop_duplicates(subset="Record ID", keep="first")
+        if len(df) < n_before:
+            print(f"Removed {n_before - len(df)} duplicate Record ID row(s)")
         df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
-        print(f"\nSaved {len(final_records):,} records to {OUTPUT_CSV}")
+        print(f"\nSaved {len(df):,} records to {OUTPUT_CSV}")
     else:
         print("No records found.")
