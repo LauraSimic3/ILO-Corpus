@@ -10,16 +10,20 @@ by a simple punctuation rule (see split_sentences), so boundaries are approximat
 
 Output files are split to stay under 500 MB each (SketchEngine upload limit).
 Output filenames follow the pattern: ILO_Corpus_Batch_01.xml, _02.xml, etc.
+A new batch is started when the estimated XML size (JSON file size x 1.5) would
+exceed MAX_BATCH_SIZE_MB (450), or when a batch already holds 800 documents.
+A log file se_format_<timestamp>.log is written to the current working directory.
 
 This step is optional — it is only needed if you intend to upload the corpus
 to SketchEngine. The JSON files from Step 3 are usable independently.
 
 Dependencies:
-    pip install tqdm
+    pip install -r requirements.txt
 
 Usage:
     python 05_format_sketchengine.py
-    Set JSON_INPUT_FOLDER and XML_OUTPUT_FOLDER below before running.
+    Run it from the folder that holds the JSON output folder (the current working
+    directory). Set JSON_INPUT_FOLDER and XML_OUTPUT_FOLDER below to override the defaults.
 """
 
 import os
@@ -223,7 +227,7 @@ def main():
 
     print("\n" + "=" * 60)
     print(f"Total documents converted: {total_docs:,}")
-    print(f"Output XML files:")
+    print("Output XML files:")
     for bn, fp, sz, dc in output_info:
         status = "OK" if sz <= 500 else "OVERSIZED"
         print(f"  Batch {bn:02d}: {sz:.1f} MB  {dc:,} docs  [{status}]")

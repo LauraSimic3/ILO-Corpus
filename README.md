@@ -2,7 +2,7 @@
 
 **Version MAR2026.** Catalogue snapshot harvested November 2025. This release corresponds to the corpus version analysed in the accompanying paper.
 
-A century-scale corpus of English-language International Labour Organization (ILO) publications, built from the ILO Labordoc catalogue API. The corpus comprises **53,830 documents** spanning **1919–2024**, totalling over 916 million words, and is designed to support large-scale computational analysis of ILO institutional discourse.
+A century-scale corpus of English-language International Labour Organization (ILO) publications, built from the ILO Labordoc catalogue API. The corpus comprises **53,830 documents** spanning **1919–2024**, totalling about 917 million words, and is designed to support large-scale computational analysis of ILO institutional discourse.
 
 This repository provides the pipeline used to construct the corpus, shared metadata files, and documentation to enable replication and adaptation.
 
@@ -35,7 +35,7 @@ This repository provides the pipeline used to construct the corpus, shared metad
 |---|---|
 | Total documents | 53,830 |
 | Publication years | 1919–2024 |
-| Total words | ~916 million |
+| Total words | about 917 million |
 | Language | English |
 | Source | ILO Labordoc catalogue API |
 | Document types | Reports, working papers, studies, guidelines, conference proceedings |
@@ -47,6 +47,11 @@ This repository provides the pipeline used to construct the corpus, shared metad
 See [PIPELINE_README.md](PIPELINE_README.md) for full instructions.
 
 **Requirements:**
+
+- **Git LFS** ([git-lfs.com](https://git-lfs.com)). The two metadata CSV files are stored in Git LFS. Install it, run `git lfs install` once, then clone the repository (or run `git lfs pull` in an existing clone). Without Git LFS, each CSV is a small text "pointer" file of about 130 bytes whose first line reads `version https://git-lfs.github.com/spec/v1`, not the real data. If you see this, run `git lfs pull`.
+- The Python packages in `requirements.txt` (see below).
+
+Library versions used for the paper: Python 3.13.11, requests 2.32.3, pandas 2.2.3, PyMuPDF 1.26–1.27, PyPDF2 3.0.1. PyPDF2 is used only for download validation in `02_download_pdfs.py`; PyMuPDF does the text extraction.
 
 A virtual environment is recommended to avoid dependency conflicts:
 ```
@@ -64,6 +69,10 @@ python 02_download_pdfs.py       # download PDFs
 python 03_extract_text_to_json.py  # extract text
 python 04_build_and_verify.py    # build and verify corpus metadata
 ```
+
+Run each script from the folder that holds its inputs and outputs (the working directory): the scripts read and write `pdf_downloads/`, `json_output/` and the metadata CSV files in the current folder.
+
+Steps 2–4 never pick up the released `ILO_labordoc_metadata_MAR2026.csv` automatically, so a new run cannot use or overwrite it by accident. If you want to run them on the full released file, set `METADATA_CSV` (Steps 2 and 3) or `ILO_LABORDOC_CSV` (Step 4) near the top of the script by hand. Each script prints the metadata file it is using.
 
 Output filenames are automatically dated (e.g. `ILO_labordoc_metadata_08APR2026.csv`). Steps 2–4 auto-detect the output from the previous step — no manual filename configuration needed. File names are case-sensitive on some systems; the scripts read and write the same names as the released files (`ILO_labordoc_metadata_*.csv`, `ILO_Corpus_metadata_*.csv`).
 
@@ -126,7 +135,7 @@ In the Labordoc metadata file, `IN_CORPUS` records `YES` or `NO` only: whether t
 
 ## Metadata files
 
-The two metadata files are stored in this repository via [Git LFS](https://git-lfs.com). To download them, either:
+The two metadata files are stored in this repository via [Git LFS](https://git-lfs.com) (see Requirements above; a file of about 130 bytes is an LFS pointer, not the data). To download them, either:
 - Clone the repository with Git LFS installed: `git lfs install` then `git clone https://github.com/LauraSimic3/ILO-Corpus.git`
 - Or download each file individually from the GitHub interface.
 
@@ -140,7 +149,7 @@ The two metadata files are stored in this repository via [Git LFS](https://git-l
 Both CSV files were produced during the original build and keep some columns that the released scripts do not create. The released files were not regenerated for this release.
 
 **`ILO_labordoc_metadata_MAR2026.csv` (29 columns).**
-- Columns a fresh run of Step 1 produces (24): `Main URL`, `Record ID`, `Main Title`, `Publication Place`, `Publisher`, `Publication Date`, `Physical Description`, `Topical Subject`, `Resource URL`, `Alternative URL`, `Subtitle`, `Responsibility`, `Personal Author`, `Corporate Author`, `Abstract/Summary`, `Bibliography Note`, `Variant Title`, `Subject Source`, `System Control Number`, `Material Type`, `Language`, `ISSN/ISBN`, `Ilo Name`, `Leader (Format)`, `Year` (plus the `IN_CORPUS` column that Step 4 adds).
+- Columns a fresh run of Step 1 produces (25, including `Year`): `Main URL`, `Record ID`, `Main Title`, `Publication Place`, `Publisher`, `Publication Date`, `Physical Description`, `Topical Subject`, `Resource URL`, `Alternative URL`, `Subtitle`, `Responsibility`, `Personal Author`, `Corporate Author`, `Abstract/Summary`, `Bibliography Note`, `Variant Title`, `Subject Source`, `System Control Number`, `Material Type`, `Language`, `ISSN/ISBN`, `Ilo Name`, `Leader (Format)`, `Year` (plus the `IN_CORPUS` column that Step 4 adds).
 - Columns in the released file that the scripts do not create: `DOWNLOAD_ATTEMPTED`, `DOWNLOAD_RESULT`, `LIKELY_ENGLISH`.
 - In the released file `Year` is the harvest year. A fresh run of Step 1 takes `Year` from each record's own publication date.
 

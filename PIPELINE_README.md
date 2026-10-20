@@ -3,7 +3,7 @@
 A reproducible pipeline for building a corpus of International Labour Organisation (ILO) documents (English-language in the released corpus) from the available ILO Labordoc catalogue API.
 
 This repository accompanies the data paper:
-> *[Full citation to be added on publication]*
+> *[Full citation forthcoming]*
 
 ---
 
@@ -22,6 +22,8 @@ This repository accompanies the data paper:
 ---
 
 ## Requirements
+
+**Git LFS** ([git-lfs.com](https://git-lfs.com)) is required to download the two metadata CSV files, which are stored in Git LFS. Install it, run `git lfs install` once, then clone the repository (or run `git lfs pull` in an existing clone). Without Git LFS each CSV is a small text "pointer" file of about 130 bytes (its first line reads `version https://git-lfs.github.com/spec/v1`) instead of the real data; if you see this, run `git lfs pull`.
 
 A virtual environment is recommended to avoid dependency conflicts:
 
@@ -44,6 +46,8 @@ Step 3  03_extract_text_to_json.py  Extract text, detect English → json_output
 Step 4  04_build_and_verify.py      Build corpus metadata CSV + verify alignment across all three sources
 Step 5  05_format_sketchengine.py   (optional) JSON → XML → sketchengine_xml/
 ```
+
+> **Working directory:** run every script from the folder that holds its inputs and outputs. The scripts read and write `pdf_downloads/`, `json_output/`, `sketchengine_xml/` and the metadata CSV files in the current folder, and Steps 2–4 look for `ILO_labordoc_metadata_*.csv` there.
 
 > **DATE** in filenames is automatically populated with the date the script is run (e.g. `08APR2026`). Steps 2, 3, and 4 auto-detect the `ILO_labordoc_metadata_DATE.csv` produced by Step 1, so no manual filename configuration is needed when running the pipeline in sequence.
 
@@ -72,9 +76,11 @@ LANGUAGE_FILTER = None   # None = all languages; or e.g. "eng", "fre", "spa"
 python 01_collect_metadata.py
 ```
 
-**Output:** `ILO_labordoc_metadata_DATE.csv` — one row per catalogue record, 24 columns including Record ID, title, URLs, publication date, author, subject, and Ilo Name (the ILO's internal call number, used for PDF filename matching in later steps).
+**Output:** `ILO_labordoc_metadata_DATE.csv` — one row per catalogue record, 25 columns (24 MARC-derived fields plus `Year`) including Record ID, title, URLs, publication date, author, subject, and Ilo Name (the ILO's internal call number, used for PDF filename matching in later steps).
 
 > **API pagination:** The ILO Alma SRU API limits responses to 50 records per request. To ensure comprehensive coverage the script works around this by querying one year at a time and paginating through all 50-record batches within each year until all records for that year are retrieved. This is why the script is structured by year — without this approach, records beyond the first 50 per query would be silently missed. The API returns records in MARCXML format; the script parses this and maps the relevant MARC fields to a flat CSV structure.
+
+> **Network errors and progress:** requests are retried automatically (up to 5 times, with increasing waits). Progress is saved after each year in `ILO_labordoc_metadata_checkpoint.jsonl`; if a run stops part-way, run the script again with the same settings and it resumes after the last completed year. The checkpoint file is deleted when the final CSV has been written.
 
 > The released all-language file holds 128,584 rows (128,580 unique Record IDs; `Year` values 1919–2026). A full harvest takes several hours to run. You can restrict `START_YEAR`/`END_YEAR` to collect a subset by date range.
 
@@ -90,7 +96,7 @@ Attempts to download a PDF for every row in the metadata CSV. The script uses tw
 The `Alternative URL` column in the metadata contains direct links to PDF files hosted on the ILO public library server (`ilo.org/public/libdoc/...`). The script attempts a straightforward HTTP GET request for these first. This is faster but not all records have a working direct URL.
 
 **Method 2 — Browser automation (Main URL, Playwright)**
-If the direct download fails or no Alternative URL is present, the script falls back to the `Main URL` — the ILO Labordoc catalogue page for that record. Playwright launches a Chromium browser, navigates to the page, and clicks the download button. This method is reliable but slow, as each download opens and closes a fresh browser instance. This was the primary method used to build the original corpus.
+If the direct download fails or no Alternative URL is present, the script falls back to the `Main URL` — the ILO Labordoc catalogue page for that record. Playwright launches a Chromium browser, navigates to the page, and clicks the download button. This method is reliable but slow, as each download opens and closes a fresh browser instance. The browser runs with visible windows (`headless=False`), so this step needs a display and cannot run on a machine without one. If the browser cannot be started (for example Chromium is not installed), the script prints a message once and records only the rows that needed the browser as missed; install it with `python -m playwright install chromium`. This was the primary method used to build the original corpus.
 
 Downloaded files are validated with PyPDF2; any file that fails validation is deleted automatically.
 
@@ -112,9 +118,9 @@ python 02_download_pdfs.py
 - `download_reports/` — per-batch success and failure CSVs
 - `FINAL_<timestamp>_downloaded.csv` / `FINAL_<timestamp>_missed.csv` — master download logs
 
-> Not all records will have a downloadable PDF — some catalogue records do not have a publicly accessible full-text document. The `FINAL_missed.csv` file records every failed attempt with the URLs tried.
+> Not all records will have a downloadable PDF — some catalogue records do not have a publicly accessible full-text document. The `FINAL_<timestamp>_missed.csv` file records every failed attempt with the URLs tried.
 
-> **Resumable:** The script processes rows in batches of 5,000 and saves progress after each batch. If interrupted, you can re-run it; already-downloaded PDFs are not re-downloaded (the JSON skip logic in Step 3 handles duplicates).
+> **Resumable:** The script processes rows in batches of 5,000 and saves progress after each batch. If interrupted, you can re-run it: a row is skipped when `pdf_downloads/<Record ID>.pdf` already exists and passes the PDF validation (recorded as "Already downloaded (skipped)" in the reports). An existing file that fails validation is deleted and downloaded again.
 
 > **Resource estimates (full 1900–2024 run):** ~200 GB disk space for downloaded PDFs. Runtime varies substantially depending on network speed and how many records require browser automation (Method 2); expect multiple days for a full run. The script is resumable, so it can be run in sessions.
 
@@ -198,7 +204,7 @@ python 04_build_and_verify.py
 
 Converts the JSON files from Step 3 into SketchEngine vertical corpus XML format. Each document becomes a `<doc>` element with metadata stored as XML attributes, containing `<p>` (page-level segment, approximately a PDF page) and `<s>` (sentence) child elements. `<p>` elements are created at the blank lines Script 3 leaves between pages, so they are **not** paragraphs; `<s>` elements come from a punctuation rule (split after `.`, `!` or `?` followed by whitespace and a capital letter), so sentence boundaries are approximate. `&`, `<`, `>` and quotation marks in metadata attribute values are escaped.
 
-Output is split into multiple files to stay under the SketchEngine 500 MB per-file upload limit.
+Output is split into multiple files to stay under the SketchEngine 500 MB per-file upload limit. A new batch file is started when the estimated XML size (JSON file size × 1.5) would exceed `MAX_BATCH_SIZE_MB` (450 MB), or when a batch already holds 800 documents. The estimate is approximate, so check the sizes printed at the end of the run. A log file `se_format_<timestamp>.log` is written to the current folder.
 
 **Configure** (top of script):
 ```python
@@ -225,12 +231,12 @@ Two metadata files are shared alongside this pipeline and are available directly
 
 | File | Size | Rows | Description |
 |---|---|---|---|
-| `ILO_labordoc_metadata_MAR2026.csv` | 115 MB | 128,584 | Labordoc catalogue records in **all languages** (`Year` 1919–2026); four Record IDs appear twice. Includes columns added during the original build (see README, "Provenance of released files"). **Do not overwrite** — this is the authoritative source. |
-| `ILO_Corpus_metadata_MAR2026.csv` | 39 MB | 53,830 | Curated subset: documents that were successfully downloaded, passed English detection, and were included in the final corpus. Publication dates have been cleaned (brackets removed, Arabic digits converted, Year field used as fallback). |
+| `ILO_labordoc_metadata_MAR2026.csv` | about 120 MB | 128,584 | Labordoc catalogue records in **all languages** (`Year` 1919–2026); four Record IDs appear twice. Includes columns added during the original build (see README, "Provenance of released files"). **Do not overwrite** — this is the authoritative source. |
+| `ILO_Corpus_metadata_MAR2026.csv` | about 40 MB | 53,830 | Curated subset: documents that were successfully downloaded, passed English detection, and were included in the final corpus. `publication_date` is a 4-digit year. |
 
 > **Downloading:** Because these files are stored via Git LFS, cloning the repository with a standard `git clone` will download them automatically if Git LFS is installed (`git lfs install` then `git clone ...`). Alternatively, download them individually from the GitHub interface using the Download button on each file's page.
 
-> **Publication date note:** The `Publication Date` field in `ILO_labordoc_metadata_MAR2026.csv` is the raw API value and may contain non-standard formats (brackets, question marks, Arabic digits, date ranges). The `publication_date` field in `ILO_Corpus_metadata_MAR2026.csv` is a cleaned 4-digit year. These differences are by design — see Step 3 script comments for the cleaning logic.
+> **Publication date note:** The `Publication Date` field in `ILO_labordoc_metadata_MAR2026.csv` is the raw API value and may contain non-standard formats (brackets, question marks, Arabic digits, date ranges). The `publication_date` field in `ILO_Corpus_metadata_MAR2026.csv` is a 4-digit year. In Step 3 the year is taken from the `Year` field, or from `Publication Date` if there is none; see the `extract_year` function in `03_extract_text_to_json.py`.
 
 ---
 
@@ -249,7 +255,7 @@ Two metadata files are shared alongside this pipeline and are available directly
 ## Citation
 
 If you use this pipeline or the metadata files, please cite:
-> *[Full citation to be added on publication]*
+> *[Full citation forthcoming]*
 
 ---
 
