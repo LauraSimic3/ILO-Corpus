@@ -3,23 +3,27 @@ ILO Corpus Pipeline — Step 3: Extract Text from PDFs and Save as JSON
 ======================================================================
 For each downloaded PDF:
   1. Extracts text using PyMuPDF
-  2. Checks the text is at least 80% English (langdetect)
-  3. Matches metadata from the ilo_metadata CSV using the Record ID in the filename (set by Step 2)
+  2. Checks the language with langdetect: the English probability over the first
+     10,000 characters of the extracted text must be at least 0.80 (ENGLISH_THRESHOLD);
+     one decision per document
+  3. Matches metadata from the ILO_labordoc_metadata CSV using the Record ID in the filename (set by Step 2)
   4. Saves a JSON file per document containing text + metadata
 
 Non-English PDFs and PDFs with insufficient text are skipped and logged.
 
 Output:
-    JSON_OUTPUT_FOLDER/      — one .json file per accepted PDF
+    JSON_OUTPUT_FOLDER/      — one <Record ID>.pdf.json file per accepted PDF
     extract_log_<ts>.log     — full processing log
     extract_failures_<ts>.log — skipped files with reason
 
 Dependencies:
-    pip install pymupdf langdetect pandas tqdm
+    pip install -r requirements.txt
 
 Usage:
     python 03_extract_text_to_json.py
-    Set PDF_FOLDER, JSON_OUTPUT_FOLDER, and METADATA_CSV below before running.
+    Run it from the folder that holds the PDFs folder and the metadata CSV (the
+    current working directory); outputs are written there. Set PDF_FOLDER,
+    JSON_OUTPUT_FOLDER, and METADATA_CSV below to override the defaults.
 """
 
 import glob
@@ -38,15 +42,31 @@ DetectorFactory.seed = 0
 from tqdm import tqdm
 
 
+# The released metadata file. It is never picked automatically, so a new run cannot
+# use it by accident (Step 4 rewrites the IN_CORPUS column of the file it finds).
+SHIPPED_RELEASE_CSV = "ILO_labordoc_metadata_MAR2026.csv"
+
+
 def _find_labordoc_csv():
-    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv)."""
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv).
+
+    The released file ILO_labordoc_metadata_MAR2026.csv is skipped. To use it
+    deliberately, set METADATA_CSV below by hand.
+    """
     matches = sorted(glob.glob("ILO_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
-    if not matches:
+    candidates = [m for m in matches if os.path.basename(m) != SHIPPED_RELEASE_CSV]
+    if not candidates:
+        if matches:
+            raise FileNotFoundError(
+                f"Only the released file {SHIPPED_RELEASE_CSV} was found in the current directory, "
+                "and it is not used automatically. Run Step 1 first, or set "
+                "METADATA_CSV below by hand to use the released file."
+            )
         raise FileNotFoundError(
             "No ILO_labordoc_metadata_DATE.csv found in the current directory. "
             "Run Step 1 first, or set METADATA_CSV manually below."
         )
-    return matches[0]
+    return candidates[0]
 
 
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
@@ -74,7 +94,7 @@ logger = logging.getLogger(__name__)
 # ── METADATA LOADING ───────────────────────────────────────────────────────────
 def load_metadata(csv_path):
     """
-    Load ilo_metadata CSV and build lookup dictionaries keyed by:
+    Load the ILO_labordoc_metadata CSV and build lookup dictionaries keyed by:
       - Record ID (int)
       - Ilo Name (lowercase string)
     """
@@ -191,6 +211,16 @@ def clean_value(value):
 
 
 def extract_year(value):
+    """
+    Return a 4-digit year (1900-2030) as a string, or None if there is none.
+
+    A value that is already a 4-digit year is returned as it is. Otherwise the first
+    19xx or 20xx that stands as a separate word is used, so brackets, question marks
+    and ranges are ignored ("[1950?]" -> "1950", "1950-1952" -> "1950"). A year written
+    directly after a letter ("c1950") is not matched, and non-ASCII digits are not
+    converted. build_metadata() applies this to the Year field first and falls back
+    to the Publication Date field.
+    """
     if not value:
         return None
     s = str(value)
@@ -324,6 +354,7 @@ def main():
 
     os.makedirs(JSON_OUTPUT_FOLDER, exist_ok=True)
 
+    print(f"Using metadata file: {METADATA_CSV}")
     by_record_id, by_ilo_name = load_metadata(METADATA_CSV)
 
     pdf_files = sorted(Path(PDF_FOLDER).glob("*.pdf"), key=lambda p: p.stat().st_mtime)

@@ -12,3 +12,12 @@ test_run/sketchengine_xml/
 # Python cache
 __pycache__/
 *.pyc
+
+# Pipeline outputs: never commit. json_output/ holds ILO full text (ILO copyright)
+json_output/
+download_reports/
+FINAL_*.csv
+# Dated run outputs from fresh runs (e.g. ILO_labordoc_metadata_08APR2026.csv).
+# The shipped MAR2026 files do not match this pattern.
+ILO_*_[0-9]*.csv
+ILO_labordoc_metadata_checkpoint.jsonl

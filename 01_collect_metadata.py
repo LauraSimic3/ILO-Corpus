@@ -9,17 +9,26 @@ Output: ILO_labordoc_metadata_DATE.csv  (one row per unique Record ID)
         DATE is automatically set to the date the script is run (e.g. 08APR2026)
 
 Dependencies:
-    pip install requests pandas openpyxl
+    pip install requests pandas      (or: pip install -r requirements.txt)
+
+Network errors are retried automatically. Progress is saved after each year in
+ILO_labordoc_metadata_checkpoint.jsonl, so if the run stops part-way, running the
+script again with the same settings resumes after the last completed year. The
+checkpoint file is deleted once the final CSV has been written.
 
 Usage:
     python 01_collect_metadata.py
     Adjust START_YEAR / END_YEAR below before running.
 """
 
+import json
+import os
 import re
 import sys
 from datetime import datetime
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import xml.etree.ElementTree as ET
 import pandas as pd
 
@@ -36,6 +45,9 @@ OUTPUT_CSV  = f"ILO_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()
 # multilingual records such as "eng | fre | spa" are included for "eng".
 LANGUAGE_FILTER = None
 
+# Progress file written after each year (deleted once the final CSV is saved)
+CHECKPOINT_FILE = "ILO_labordoc_metadata_checkpoint.jsonl"
+
 # ILO Alma SRU API endpoint — queries ILO publications for ONE publication year
 # per request (main_pub_date >= year AND <= year), so years do not overlap.
 BASE_URL = (
@@ -49,12 +61,25 @@ BASE_URL = (
 )
 
 # ── API FETCHING ───────────────────────────────────────────────────────────────
+def _make_session():
+    """HTTP session that retries failed requests (connection errors, 429 and 5xx) with backoff."""
+    session = requests.Session()
+    retry = Retry(total=5, backoff_factor=2, status_forcelist=(429, 500, 502, 503, 504))
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+SESSION = _make_session()
+
+
 def fetch_records(year, start=1):
     language_clause = (
         f"%20AND%20alma.language=%22{LANGUAGE_FILTER}%22" if LANGUAGE_FILTER else ""
     )
     url = BASE_URL.format(start=start, year=year, language_clause=language_clause)
-    response = requests.get(url, timeout=30)
+    response = SESSION.get(url, timeout=30)
     response.raise_for_status()
     return ET.fromstring(response.content)
 
@@ -150,6 +175,42 @@ def collect_year_metadata(year):
     return all_records
 
 
+# ── CHECKPOINTING ──────────────────────────────────────────────────────────────
+def _settings():
+    return {"start_year": START_YEAR, "end_year": END_YEAR, "language": LANGUAGE_FILTER}
+
+
+def load_checkpoint():
+    """Records and completed years from an unfinished run with the same settings."""
+    records, done = [], set()
+    if not os.path.exists(CHECKPOINT_FILE):
+        return records, done
+    try:
+        with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f:
+            if json.loads(f.readline()) != {"settings": _settings()}:
+                return [], set()          # different settings: ignore the old checkpoint
+            for line in f:
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    break                 # half-written last line: ignore it
+                records.extend(item["records"])
+                done.add(item["year"])
+    except (OSError, ValueError):
+        return [], set()
+    return records, done
+
+
+def start_checkpoint():
+    with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
+        f.write(json.dumps({"settings": _settings()}) + "\n")
+
+
+def save_year_to_checkpoint(year, records):
+    with open(CHECKPOINT_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"year": year, "records": records}, ensure_ascii=False) + "\n")
+
+
 # ── MAIN ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -158,10 +219,25 @@ if __name__ == "__main__":
     print(f"Output: {OUTPUT_CSV}")
     print("=" * 50)
 
-    final_records = []
+    final_records, done_years = load_checkpoint()
+    if done_years:
+        print(f"Resuming: {len(done_years)} year(s) already collected "
+              f"({len(final_records):,} records) from {CHECKPOINT_FILE}")
+    else:
+        start_checkpoint()
+
     for y in range(START_YEAR, END_YEAR + 1):
-        records = collect_year_metadata(y)
+        if y in done_years:
+            continue
+        try:
+            records = collect_year_metadata(y)
+        except Exception as e:
+            print(f"\nERROR while collecting {y}: {e}")
+            print(f"Progress up to the last completed year is saved in {CHECKPOINT_FILE}.")
+            print("Run the script again with the same settings to resume.")
+            sys.exit(1)
         final_records.extend(records)
+        save_year_to_checkpoint(y, records)
 
     if final_records:
         df = pd.DataFrame(final_records)
@@ -171,5 +247,6 @@ if __name__ == "__main__":
             print(f"Removed {n_before - len(df)} duplicate Record ID row(s)")
         df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
         print(f"\nSaved {len(df):,} records to {OUTPUT_CSV}")
+        os.remove(CHECKPOINT_FILE)
     else:
         print("No records found.")

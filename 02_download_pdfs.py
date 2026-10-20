@@ -7,20 +7,30 @@ Main URL using Playwright browser automation.
 
 Only keeps files that pass PyPDF2 validation (i.e. are real, readable PDFs).
 Progress is saved after every 5,000 rows so the script can be restarted safely.
+On a re-run, rows whose PDF (PDF_OUTPUT_FOLDER/<Record ID>.pdf) already exists and
+passes validation are skipped; an existing file that fails validation is deleted and
+downloaded again.
+
+The browser fallback opens visible Chromium windows (headless=False), so this step
+needs a display. If the browser cannot be started, a message is printed and only the
+rows that needed the browser are recorded as missed.
 
 Output:
-    PDF_OUTPUT_FOLDER/          — downloaded PDF files
-    download_reports/           — per-batch success/failure CSVs
-    FINAL_downloaded.csv        — master successful downloads log
-    FINAL_missed.csv            — master failures log
+    PDF_OUTPUT_FOLDER/                       — downloaded PDF files
+    download_reports/                        — per-batch success/failure CSVs
+    FINAL_<timestamp>_downloaded.csv         — master successful downloads log
+    FINAL_<timestamp>_missed.csv             — master failures log
+    (<timestamp> is the run time, e.g. FINAL_20260401_093000_downloaded.csv)
 
 Dependencies:
-    pip install playwright requests pandas PyPDF2
-    playwright install chromium
+    pip install -r requirements.txt
+    python -m playwright install chromium
 
 Usage:
     python 02_download_pdfs.py
-    Set METADATA_CSV and PDF_OUTPUT_FOLDER below before running.
+    Run it from the folder that holds the metadata CSV (the current working
+    directory); outputs are written there. Set METADATA_CSV and PDF_OUTPUT_FOLDER
+    below to override the defaults.
 """
 
 import asyncio
@@ -35,15 +45,31 @@ import requests
 from PyPDF2 import PdfReader
 
 
+# The released metadata file. It is never picked automatically, so a new run cannot
+# use it by accident (Step 4 rewrites the IN_CORPUS column of the file it finds).
+SHIPPED_RELEASE_CSV = "ILO_labordoc_metadata_MAR2026.csv"
+
+
 def _find_labordoc_csv():
-    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv)."""
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv).
+
+    The released file ILO_labordoc_metadata_MAR2026.csv is skipped. To use it
+    deliberately, set METADATA_CSV below by hand.
+    """
     matches = sorted(glob.glob("ILO_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
-    if not matches:
+    candidates = [m for m in matches if os.path.basename(m) != SHIPPED_RELEASE_CSV]
+    if not candidates:
+        if matches:
+            raise FileNotFoundError(
+                f"Only the released file {SHIPPED_RELEASE_CSV} was found in the current directory, "
+                "and it is not used automatically. Run Step 1 first, or set "
+                "METADATA_CSV below by hand to use the released file."
+            )
         raise FileNotFoundError(
             "No ILO_labordoc_metadata_DATE.csv found in the current directory. "
             "Run Step 1 first, or set METADATA_CSV manually below."
         )
-    return matches[0]
+    return candidates[0]
 
 
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
@@ -51,6 +77,8 @@ METADATA_CSV      = _find_labordoc_csv()   # Auto-detected from Step 1 output (I
 PDF_OUTPUT_FOLDER = "pdf_downloads"        # Folder where PDFs are saved
 REPORTS_FOLDER    = "download_reports"     # Folder for per-batch success/failure logs
 BATCH_SIZE        = 5000                   # Save progress every N rows
+
+_browser_warning_shown = False
 
 # ── PDF VALIDATION ─────────────────────────────────────────────────────────────
 def validate_pdf_file(pdf_path):
@@ -105,36 +133,51 @@ def direct_pdf_download(url, destination_dir, record_id):
 # ── PLAYWRIGHT DOWNLOAD (Main URL / fallback) ──────────────────────────────────
 async def playwright_download(url, destination_dir, record_id):
     """Opens URL in a browser and triggers the ILO download button."""
+    global _browser_warning_shown
     filename = f"{record_id}.pdf"
     os.makedirs(destination_dir, exist_ok=True)
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context(accept_downloads=True)
-        page = await context.new_page()
+    try:
+        async with async_playwright() as p:
+            try:
+                browser = await p.chromium.launch(headless=False)
+            except Exception as e:
+                if not _browser_warning_shown:
+                    _browser_warning_shown = True
+                    print("\n  WARNING: the Playwright browser could not be started "
+                          f"({str(e).strip().splitlines()[0] if str(e).strip() else type(e).__name__}).")
+                    print("  Rows that need the browser will be recorded as missed. "
+                          "Install it with:  python -m playwright install chromium")
+                    print("  (the browser opens visible windows, so a display is required)\n")
+                return None
 
-        try:
-            await page.goto(url, timeout=60000)
-            async with page.expect_download() as download_info:
-                await page.evaluate("""() => {
-                    const icon = document.querySelector('md-icon[md-svg-icon="file:ic_download_24px"]');
-                    if (!icon) throw new Error('Download icon not found');
-                    const clickable = icon.closest('button, a, div[role="button"]');
-                    if (clickable) clickable.click();
-                    else throw new Error('Clickable parent not found');
-                }""")
-            download = await download_info.value
-            destination_path = os.path.join(destination_dir, filename)
-            await download.save_as(destination_path)
+            try:
+                context = await browser.new_context(accept_downloads=True)
+                page = await context.new_page()
 
-            if validate_pdf_file(destination_path):
-                return destination_path
-            return None
+                await page.goto(url, timeout=60000)
+                async with page.expect_download() as download_info:
+                    await page.evaluate("""() => {
+                        const icon = document.querySelector('md-icon[md-svg-icon="file:ic_download_24px"]');
+                        if (!icon) throw new Error('Download icon not found');
+                        const clickable = icon.closest('button, a, div[role="button"]');
+                        if (clickable) clickable.click();
+                        else throw new Error('Clickable parent not found');
+                    }""")
+                download = await download_info.value
+                destination_path = os.path.join(destination_dir, filename)
+                await download.save_as(destination_path)
 
-        except Exception:
-            return None
-        finally:
-            await browser.close()
+                if validate_pdf_file(destination_path):
+                    return destination_path
+                return None
+
+            except Exception:
+                return None
+            finally:
+                await browser.close()
+    except Exception:
+        return None
 
 
 # ── BATCH PROCESSING ───────────────────────────────────────────────────────────
@@ -155,24 +198,30 @@ async def process_batch(batch_df, batch_num, start_idx, total_rows):
         alt_url  = "" if alt_url.lower() == "nan" else alt_url
         main_url = "" if main_url.lower() == "nan" else main_url
 
-        await asyncio.sleep(random.uniform(0.5, 2.0))
-
         pdf_path   = None
         source_used = None
 
-        if alt_url:
-            pdf_path = direct_pdf_download(alt_url, PDF_OUTPUT_FOLDER, record_id)
-            if pdf_path:
-                source_used = "Alternative URL (Direct)"
-            else:
-                pdf_path = await playwright_download(alt_url, PDF_OUTPUT_FOLDER, record_id)
-                if pdf_path:
-                    source_used = "Alternative URL (Playwright)"
+        # Skip rows whose PDF was already downloaded and still passes validation
+        existing_path = os.path.join(PDF_OUTPUT_FOLDER, f"{record_id}.pdf")
+        if os.path.exists(existing_path) and validate_pdf_file(existing_path):
+            pdf_path = existing_path
+            source_used = "Already downloaded (skipped)"
+        else:
+            await asyncio.sleep(random.uniform(0.5, 2.0))
 
-        if not pdf_path and main_url:
-            pdf_path = await playwright_download(main_url, PDF_OUTPUT_FOLDER, record_id)
-            if pdf_path:
-                source_used = "Main URL"
+            if alt_url:
+                pdf_path = direct_pdf_download(alt_url, PDF_OUTPUT_FOLDER, record_id)
+                if pdf_path:
+                    source_used = "Alternative URL (Direct)"
+                else:
+                    pdf_path = await playwright_download(alt_url, PDF_OUTPUT_FOLDER, record_id)
+                    if pdf_path:
+                        source_used = "Alternative URL (Playwright)"
+
+            if not pdf_path and main_url:
+                pdf_path = await playwright_download(main_url, PDF_OUTPUT_FOLDER, record_id)
+                if pdf_path:
+                    source_used = "Main URL"
 
         row_data = row.to_dict()
         row_data["Batch_Number"] = batch_num
@@ -198,11 +247,12 @@ def main():
         print(f"ERROR: Metadata file not found: {METADATA_CSV}")
         return
 
+    print(f"Using metadata file: {METADATA_CSV}")
     os.makedirs(REPORTS_FOLDER, exist_ok=True)
 
     df = pd.read_csv(METADATA_CSV, encoding="utf-8-sig")
     if "Main URL" not in df.columns or "Alternative URL" not in df.columns:
-        print(f"ERROR: CSV must contain 'Main URL' and 'Alternative URL' columns.")
+        print("ERROR: CSV must contain 'Main URL' and 'Alternative URL' columns.")
         return
 
     total_rows  = len(df)

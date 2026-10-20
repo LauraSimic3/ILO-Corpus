@@ -25,10 +25,11 @@ folder is used and the XML count is checked separately for consistency.
 
 Usage:
     python 04_build_and_verify.py
-    Set the paths below to match your output folders/files.
+    Run it from the folder that holds the JSON/XML output folders and the metadata
+    CSV (the current working directory). Set the paths below to override the defaults.
 
 Dependencies:
-    pip install pandas
+    pip install -r requirements.txt
 """
 
 import glob
@@ -37,7 +38,6 @@ import sys
 import re
 import csv
 import json
-from collections import Counter
 from datetime import datetime
 
 import pandas as pd
@@ -45,15 +45,31 @@ import pandas as pd
 sys.stdout.reconfigure(encoding="utf-8")
 
 
+# The released metadata file. It is never picked automatically, so a new run cannot
+# use it by accident (Step 4 rewrites the IN_CORPUS column of the file it finds).
+SHIPPED_RELEASE_CSV = "ILO_labordoc_metadata_MAR2026.csv"
+
+
 def _find_labordoc_csv():
-    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv)."""
+    """Auto-detect the labordoc metadata CSV produced by Step 1 (ILO_labordoc_metadata_DATE.csv).
+
+    The released file ILO_labordoc_metadata_MAR2026.csv is skipped. To use it
+    deliberately, set ILO_LABORDOC_CSV below by hand.
+    """
     matches = sorted(glob.glob("ILO_labordoc_metadata_*.csv"), key=os.path.getmtime, reverse=True)
-    if not matches:
+    candidates = [m for m in matches if os.path.basename(m) != SHIPPED_RELEASE_CSV]
+    if not candidates:
+        if matches:
+            raise FileNotFoundError(
+                f"Only the released file {SHIPPED_RELEASE_CSV} was found in the current directory, "
+                "and it is not used automatically. Run Step 1 first, or set "
+                "ILO_LABORDOC_CSV below by hand to use the released file."
+            )
         raise FileNotFoundError(
             "No ILO_labordoc_metadata_DATE.csv found in the current directory. "
             "Run Step 1 first, or set ILO_LABORDOC_CSV manually below."
         )
-    return matches[0]
+    return candidates[0]
 
 
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
@@ -313,6 +329,8 @@ def main():
     print("=" * 62)
     print("ILO CORPUS — BUILD METADATA AND VERIFY")
     print("=" * 62)
+
+    print(f"Using metadata file: {ILO_LABORDOC_CSV}")
 
     # Determine source
     has_json = os.path.isdir(JSON_FOLDER) and any(
