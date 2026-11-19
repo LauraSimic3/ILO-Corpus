@@ -1,0 +1,8 @@
+term,sketch_engine_query, frequency , corpus_words , per_million_words 
+woman/women,"[lc=""woman"" | lemma_lc=""woman""]"," 1,116,884 "," 916,887,792 "," 1,218.1 "
+man/men,"[lc=""man"" | lemma_lc=""man""];Positive filter:0 0>0 0 ( [word=""man""])|( [word=""men""])|( [word=""Men""])|( [word=""Man""])|( [word=""men''s""])|( [word=""MEN""])|( [word=""MAN""])|( [word=""man''s""])|( [word=""Men''s""])|( [word=""Man''s""])|( [word=""MANS""])|( [word=""mans""])|( [word=""MANs""])|( [word=""MEn""])|( [word=""mAn""])|( [word=""MaN""])|( [word=""mEn""])|( [word=""MEN''S""])|( [word=""MeN""])|( [word=""MAn""])|( [word=""meN""])|( [word=""MaNS""])"," 412,461 "," 916,887,792 ", 449.8 
+gender,"[lc=""gender"" | lemma_lc=""gender""]"," 260,298 "," 916,887,792 ", 283.9 
+female,"[lc=""female"" | lemma_lc=""female""]"," 215,981 "," 916,887,792 ", 235.6 
+male,"[lc=""male"" | lemma_lc=""male""]"," 160,453 "," 916,887,792 ", 175.0 
+girl,"[lc=""girl"" | lemma_lc=""girl""]"," 94,103 "," 916,887,792 ", 102.6 
+boy,"[lc=""boy"" | lemma_lc=""boy""]"," 50,994 "," 916,887,792 ", 55.6 

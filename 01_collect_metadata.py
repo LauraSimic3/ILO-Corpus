@@ -1,0 +1,252 @@
+"""
+ILO Corpus Pipeline — Step 1: Collect Metadata from ILO API
+============================================================
+Queries the ILO Alma SRU API one publication year at a time and collects
+bibliographic metadata for ILO publications. By default records in all
+languages are collected (see LANGUAGE_FILTER below).
+
+Output: ILO_labordoc_metadata_DATE.csv  (one row per unique Record ID)
+        DATE is automatically set to the date the script is run (e.g. 08APR2026)
+
+Dependencies:
+    pip install requests pandas      (or: pip install -r requirements.txt)
+
+Network errors are retried automatically. Progress is saved after each year in
+ILO_labordoc_metadata_checkpoint.jsonl, so if the run stops part-way, running the
+script again with the same settings resumes after the last completed year. The
+checkpoint file is deleted once the final CSV has been written.
+
+Usage:
+    python 01_collect_metadata.py
+    Adjust START_YEAR / END_YEAR below before running.
+"""
+
+import json
+import os
+import re
+import sys
+from datetime import datetime
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import xml.etree.ElementTree as ET
+import pandas as pd
+
+# ── CONFIGURATION ─────────────────────────────────────────────────────────────
+START_YEAR  = 1900   # First publication year to collect
+END_YEAR    = 2024   # Last publication year to collect (inclusive)
+OUTPUT_CSV  = f"ILO_labordoc_metadata_{datetime.now().strftime('%d%b%Y').upper()}.csv"   # Auto-dated output (e.g. ILO_labordoc_metadata_08APR2026.csv)
+
+# Language filter applied in the API query. None (default) = no filter, so records
+# in all languages are collected (this reproduces the released all-language file).
+# To collect one language only, set a three-letter MARC language code, e.g.:
+#     LANGUAGE_FILTER = "eng"   # English   (also "fre" French, "spa" Spanish)
+# Note: the API matches records that list that language among their languages, so
+# multilingual records such as "eng | fre | spa" are included for "eng".
+LANGUAGE_FILTER = None
+
+# Progress file written after each year (deleted once the final CSV is saved)
+CHECKPOINT_FILE = "ILO_labordoc_metadata_checkpoint.jsonl"
+
+# ILO Alma SRU API endpoint — queries ILO publications for ONE publication year
+# per request (main_pub_date >= year AND <= year), so years do not overlap.
+BASE_URL = (
+    "https://ilo.alma.exlibrisgroup.com/view/sru/41ILO_INST"
+    "?version=1.2&operation=searchRetrieve&recordSchema=marcxml"
+    "&maximumRecords=50&startRecord={start}"
+    "&query=alma.subjects=%22ILO%20pub%22{language_clause}"
+    "%20AND%20alma.main_pub_date%3E%3D%22{year}%22"
+    "%20AND%20alma.main_pub_date%3C%3D%22{year}%22"
+    "&sortBy=alma.main_pub_date/sort.ascending"
+)
+
+# ── API FETCHING ───────────────────────────────────────────────────────────────
+def _make_session():
+    """HTTP session that retries failed requests (connection errors, 429 and 5xx) with backoff."""
+    session = requests.Session()
+    retry = Retry(total=5, backoff_factor=2, status_forcelist=(429, 500, 502, 503, 504))
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+SESSION = _make_session()
+
+
+def fetch_records(year, start=1):
+    language_clause = (
+        f"%20AND%20alma.language=%22{LANGUAGE_FILTER}%22" if LANGUAGE_FILTER else ""
+    )
+    url = BASE_URL.format(start=start, year=year, language_clause=language_clause)
+    response = SESSION.get(url, timeout=30)
+    response.raise_for_status()
+    return ET.fromstring(response.content)
+
+
+def get_subfield(record, tag, code, ns):
+    field = record.find(
+        f".//marc:datafield[@tag='{tag}']/marc:subfield[@code='{code}']", ns
+    )
+    return field.text if field is not None else ""
+
+
+def year_from_date(date_text, fallback):
+    """Year from the record's own publication date (e.g. '[1950?]', 'c1950'); fallback if none."""
+    m = re.search(r"(?<!\d)(1[5-9]\d{2}|20\d{2})(?!\d)", date_text or "")
+    return int(m.group(1)) if m else fallback
+
+
+def parse_marcxml(record_elem, record_identifier):
+    ns = {"marc": "http://www.loc.gov/MARC21/slim"}
+
+    def get_first_nonempty(options):
+        for tag, code in options:
+            val = get_subfield(record_elem, tag, code, ns)
+            if val:
+                return val
+        return ""
+
+    leader     = record_elem.find("marc:leader", ns)
+    control_001 = record_elem.find(".//marc:controlfield[@tag='001']", ns)
+    system_id  = get_subfield(record_elem, "035", "a", ns)
+
+    return {
+        "Main URL":           f"https://labordoc.ilo.org/discovery/delivery/41ILO_INST:41ILO_V2/{record_identifier}",
+        "Record ID":          control_001.text if control_001 is not None else "",
+        "Main Title":         get_subfield(record_elem, "245", "a", ns),
+        "Publication Place":  get_first_nonempty([("260", "a"), ("264", "a")]),
+        "Publisher":          get_first_nonempty([("260", "b"), ("264", "b")]),
+        "Publication Date":   get_first_nonempty([("260", "c"), ("264", "c")]),
+        "Physical Description": get_subfield(record_elem, "300", "a", ns),
+        "Topical Subject":    get_subfield(record_elem, "650", "a", ns),
+        "Resource URL":       get_subfield(record_elem, "856", "u", ns),
+        "Alternative URL":    get_subfield(record_elem, "856", "u", ns),
+        "Subtitle":           get_subfield(record_elem, "245", "b", ns),
+        "Responsibility":     get_subfield(record_elem, "245", "c", ns),
+        "Personal Author":    get_subfield(record_elem, "100", "a", ns),
+        "Corporate Author":   get_first_nonempty([("110", "a"), ("710", "a")]),
+        "Abstract/Summary":   get_subfield(record_elem, "520", "a", ns),
+        "Bibliography Note":  get_subfield(record_elem, "504", "a", ns),
+        "Variant Title":      get_subfield(record_elem, "246", "a", ns),
+        "Subject Source":     get_subfield(record_elem, "650", "2", ns),
+        "System Control Number": system_id,
+        "Material Type":      get_subfield(record_elem, "245", "h", ns),
+        "Language":           get_subfield(record_elem, "041", "a", ns),
+        "ISSN/ISBN":          get_first_nonempty([("022", "a"), ("020", "a")]),
+        "Ilo Name":           get_subfield(record_elem, "AVA", "d", ns),
+        "Leader (Format)":    leader.text if leader is not None else "",
+    }
+
+
+# ── YEAR COLLECTION ────────────────────────────────────────────────────────────
+def collect_year_metadata(year):
+    all_records = []
+    start = 1
+
+    while True:
+        root = fetch_records(year, start)
+
+        num_elem = root.find(".//{http://www.loc.gov/zing/srw/}numberOfRecords")
+        if num_elem is None:
+            break
+        total_records = int(num_elem.text)
+
+        records = root.findall(".//{http://www.loc.gov/zing/srw/}record")
+        if not records:
+            break
+
+        for rec in records:
+            id_elem = rec.find(".//{http://www.loc.gov/zing/srw/}recordIdentifier")
+            record_identifier = id_elem.text if id_elem is not None else ""
+            marc_record = rec.find(".//{http://www.loc.gov/MARC21/slim}record")
+            if marc_record is not None:
+                data = parse_marcxml(marc_record, record_identifier)
+                data["Year"] = year_from_date(data["Publication Date"], year)
+                all_records.append(data)
+
+        print(f"  {year}: {len(all_records)} / {total_records}")
+
+        if len(all_records) >= total_records:
+            break
+
+        start += 50
+
+    return all_records
+
+
+# ── CHECKPOINTING ──────────────────────────────────────────────────────────────
+def _settings():
+    return {"start_year": START_YEAR, "end_year": END_YEAR, "language": LANGUAGE_FILTER}
+
+
+def load_checkpoint():
+    """Records and completed years from an unfinished run with the same settings."""
+    records, done = [], set()
+    if not os.path.exists(CHECKPOINT_FILE):
+        return records, done
+    try:
+        with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f:
+            if json.loads(f.readline()) != {"settings": _settings()}:
+                return [], set()          # different settings: ignore the old checkpoint
+            for line in f:
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    break                 # half-written last line: ignore it
+                records.extend(item["records"])
+                done.add(item["year"])
+    except (OSError, ValueError):
+        return [], set()
+    return records, done
+
+
+def start_checkpoint():
+    with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
+        f.write(json.dumps({"settings": _settings()}) + "\n")
+
+
+def save_year_to_checkpoint(year, records):
+    with open(CHECKPOINT_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"year": year, "records": records}, ensure_ascii=False) + "\n")
+
+
+# ── MAIN ───────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+
+    print(f"Collecting ILO metadata: {START_YEAR}–{END_YEAR}")
+    print(f"Output: {OUTPUT_CSV}")
+    print("=" * 50)
+
+    final_records, done_years = load_checkpoint()
+    if done_years:
+        print(f"Resuming: {len(done_years)} year(s) already collected "
+              f"({len(final_records):,} records) from {CHECKPOINT_FILE}")
+    else:
+        start_checkpoint()
+
+    for y in range(START_YEAR, END_YEAR + 1):
+        if y in done_years:
+            continue
+        try:
+            records = collect_year_metadata(y)
+        except Exception as e:
+            print(f"\nERROR while collecting {y}: {e}")
+            print(f"Progress up to the last completed year is saved in {CHECKPOINT_FILE}.")
+            print("Run the script again with the same settings to resume.")
+            sys.exit(1)
+        final_records.extend(records)
+        save_year_to_checkpoint(y, records)
+
+    if final_records:
+        df = pd.DataFrame(final_records)
+        n_before = len(df)
+        df = df.drop_duplicates(subset="Record ID", keep="first")
+        if len(df) < n_before:
+            print(f"Removed {n_before - len(df)} duplicate Record ID row(s)")
+        df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
+        print(f"\nSaved {len(df):,} records to {OUTPUT_CSV}")
+        os.remove(CHECKPOINT_FILE)
+    else:
+        print("No records found.")
